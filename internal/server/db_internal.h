@@ -25,6 +25,11 @@
 #ifndef DB_INTERNAL_H
 #define DB_INTERNAL_H
 
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "knet.h"
 #include "db_server_config.h"
 
 typedef enum _db_sub_type_e         kdb_sub_type_e;

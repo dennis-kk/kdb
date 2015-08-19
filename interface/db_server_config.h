@@ -25,11 +25,6 @@
 #ifndef DB_SERVER_CONFIG_H
 #define DB_SERVER_CONFIG_H
 
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include "knet.h"
-
 typedef enum _db_error_e {
     db_error_ok = 0,                    /* 成功 */
     db_error_invalid_path,              /* 路径无效 */
