@@ -46,11 +46,18 @@ typedef enum _db_error_e {
     db_error_load_plugin,               /* 加载插件失败 */
 } db_error_e;
 
-typedef struct _db_server_t         kdb_server_t;
-typedef struct _db_space_t          kdb_space_t;
-typedef struct _db_space_value_t    kdb_space_value_t;
-typedef struct _db_value_t          kdb_value_t;
-typedef enum _db_space_value_type_e kdb_space_value_type_e;
+typedef struct _db_server_t      kdb_server_t;
+typedef struct _db_space_t       kdb_space_t;
+typedef struct _db_space_value_t kdb_space_value_t;
+typedef struct _db_value_t       kdb_value_t;
+
+/**
+ * 空间值类型
+ */
+typedef enum _db_space_value_type_e {
+    space_value_type_value = 1, /* 属性 */
+    space_value_type_space = 2, /* 空间 */
+} kdb_space_value_type_e;
 
 #ifdef WIN32
 #	define WIN32_LEAN_AND_MEAN

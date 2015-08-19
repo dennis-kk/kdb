@@ -25,6 +25,8 @@
 #ifndef DB_SERVER_API_H
 #define DB_SERVER_API_H
 
+#include <stdint.h>
+
 #include "db_server_config.h"
 
 #ifdef __cplusplus /* C++ */

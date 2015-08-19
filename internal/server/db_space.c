@@ -27,14 +27,6 @@
 #include "memcache_analyzer.h"
 
 /**
- * 空间值类型
- */
-enum _db_space_value_type_e {
-    space_value_type_value = 1, /* 属性 */
-    space_value_type_space = 2, /* 空间 */
-};
-
-/**
  * 值变化发布类型
  */
 enum _db_sub_type_e {
