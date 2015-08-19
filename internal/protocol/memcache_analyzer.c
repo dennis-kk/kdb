@@ -73,8 +73,8 @@ struct _memcache_analyzer_t {
     int               key_count;                              /* gets键的数量 */
     char              change_value_char[CHANGE_VALUE_LENGTH]; /* incr, decr值*/
     uint64_t          change_value;                           /* incr, decr值*/
-    db_space_value_t* return_value;                           /* get返回的值*/
-    db_space_value_t* return_value_array[MAX_KEYS];           /* gets返回的值数组*/
+    kdb_space_value_t* return_value;                           /* get返回的值*/
+    kdb_space_value_t* return_value_array[MAX_KEYS];           /* gets返回的值数组*/
 };
 
 memcache_analyzer_t* memcache_analyzer_create() {
@@ -453,7 +453,7 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
 
 void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, int error) {
     int         i = 0;
-    db_value_t* v = 0;
+    kdb_value_t* v = 0;
     kstream_t* stream = knet_channel_ref_get_stream(channel);
     if (mc->noreply) {
         return;
@@ -483,8 +483,8 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
             case command_type_get:
                 if (mc->return_value) {
                     v = kdb_space_value_get_value(mc->return_value);
-                    knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->key, 0, value_get_size(v));
-                    knet_stream_push(stream, value_get_value(v), value_get_size(v));
+                    knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->key, 0, kdb_value_get_size(v));
+                    knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
                     knet_stream_push_varg(stream, "\r\n");
                 }
                 knet_stream_push_varg(stream, "END\r\n");
@@ -493,8 +493,8 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
                 for (i = 0; i < mc->key_count; i++) {
                     if (mc->return_value_array[i]) {
                         v = kdb_space_value_get_value(mc->return_value_array[i]);
-                        knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->keys[i], 0, value_get_size(v));
-                        knet_stream_push(stream, value_get_value(v), value_get_size(v));
+                        knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->keys[i], 0, kdb_value_get_size(v));
+                        knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
                         knet_stream_push_varg(stream, "\r\n");
                     }
                 }
@@ -546,11 +546,11 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
     }
 }
 
-int publish_update(kchannel_ref_t* channel, const char* path, db_space_value_t* sv) {
+int publish_update(kchannel_ref_t* channel, const char* path, kdb_space_value_t* sv) {
     kstream_t*  stream = knet_channel_ref_get_stream(channel);
-    db_value_t* dv     = kdb_space_value_get_value(sv);
-    knet_stream_push_varg(stream, "PUB UPDATED %s %d\r\n", path, value_get_size(dv));
-    knet_stream_push(stream, value_get_value(dv), value_get_size(dv));
+    kdb_value_t* dv     = kdb_space_value_get_value(sv);
+    knet_stream_push_varg(stream, "PUB UPDATED %s %d\r\n", path, kdb_value_get_size(dv));
+    knet_stream_push(stream, kdb_value_get_value(dv), kdb_value_get_size(dv));
     knet_stream_push_varg(stream, "\r\nEND\r\n");
     return db_error_ok;
 }
@@ -573,7 +573,7 @@ int memcache_analyzer_analyze(memcache_analyzer_t* mc, kchannel_ref_t* channel) 
         if (error_ok != knet_stream_pop_until(stream, MEMCACHED_CRLF, mc->command_line, &size)) {
             return db_error_channel_need_more;
         }
-        mc->command_line[size + 2] = 0;
+        mc->command_line[size] = 0;
         /* 获取命令行数据 */
         error = memcache_analyzer_analyze_command_line(mc, mc->command_line);
     } else {

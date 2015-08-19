@@ -25,69 +25,107 @@
 #ifndef DB_SERVER_H
 #define DB_SERVER_H
 
-#include "server_config.h"
+#include "db_internal.h"
+#include "db_server_api.h"
 
 /**
  * 建立服务器
- * @return db_server_t实例
+ * @return kdb_server_t实例
  */
-db_server_t* kdb_server_create();
+kdb_server_t* kdb_server_create();
 
 /**
  * 销毁
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  */
-void kdb_server_destroy(db_server_t* srv);
+void kdb_server_destroy(kdb_server_t* srv);
 
 /**
  * 启动
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  * @param argc 参数个数
  * @param argv 参数指针数组
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_server_start(db_server_t* srv, int argc, char** argv);
+int kdb_server_start(kdb_server_t* srv, int argc, char** argv);
 
 /**
  * 停止
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  */
-void kdb_server_stop(db_server_t* srv);
+void kdb_server_stop(kdb_server_t* srv);
 
 /**
  * 等待停止
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  */
-void kdb_server_wait_for_stop(db_server_t* srv);
+void kdb_server_wait_for_stop(kdb_server_t* srv);
 
 /**
  * 获取空间(非根空间)哈希表桶数量
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  * @return 空间(非根空间)哈希表桶数量
  */
-int kdb_server_get_space_buckets(db_server_t* srv);
+int kdb_server_get_space_buckets(kdb_server_t* srv);
 
 /**
  * 获取客户端管道超时(秒)
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  * @return 客户端管道超时(秒)
  */
-int kdb_server_get_channel_timeout(db_server_t* srv);
+int kdb_server_get_channel_timeout(kdb_server_t* srv);
 
 /**
  * 获取命令缓冲区指针
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  * @return 命令缓冲区指针
  */
-char* kdb_server_get_action_buffer(db_server_t* srv);
+char* kdb_server_get_action_buffer(kdb_server_t* srv);
 
 /**
  * 获取命令缓冲区长度
- * @param srv db_server_t实例
+ * @param srv kdb_server_t实例
  * @return 命令缓冲区长度
  */
-int kdb_server_get_action_buffer_length(db_server_t* srv);
+int kdb_server_get_action_buffer_length(kdb_server_t* srv);
+
+/**
+ * 调用插件回调 - 新空间或属性值建立
+ * @param srv kdb_server_t实例
+ * @param value kdb_space_value_t实例
+ */
+void kdb_server_call_cb_on_add(kdb_server_t* srv, kdb_space_value_t* value);
+
+/**
+ * 调用插件回调 - 属性值删除
+ * @param srv kdb_server_t实例
+ * @param value kdb_space_value_t实例
+ */
+void kdb_server_call_cb_on_delete(kdb_server_t* srv, kdb_space_value_t* value);
+
+/**
+ * 调用插件回调 - 属性值更新
+ * @param srv kdb_server_t实例
+ * @param value kdb_space_value_t实例
+ */
+void kdb_server_call_cb_on_update(kdb_server_t* srv, kdb_space_value_t* value);
+
+/**
+ * 取得插件指针
+ * @param srv kdb_server_t实例
+ * @return kdb_server_plugin_t实例
+ */
+kdb_server_plugin_t* kdb_server_get_plugin(kdb_server_t* srv);
+
+/**
+ * 加载插件
+ * @param srv kdb_server_t实例
+ * @param file 插件文件名
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int kdb_server_load_plugin(kdb_server_t* srv, const char* file);
 
 /**
  * 监听管道回调

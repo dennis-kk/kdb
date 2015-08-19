@@ -10,6 +10,20 @@
       <Platform>Win32</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\interface\db_server_api.h" />
+    <ClInclude Include="..\internal\protocol\memcache_analyzer.h" />
+    <ClInclude Include="..\internal\server\db_internal.h" />
+    <ClInclude Include="..\internal\server\db_server.h" />
+    <ClInclude Include="..\internal\server\db_server_config.h" />
+    <ClInclude Include="..\internal\server\db_space.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\internal\protocol\memcache_analyzer.c" />
+    <ClCompile Include="..\internal\server\db_server.c" />
+    <ClCompile Include="..\internal\server\db_space.c" />
+    <ClCompile Include="..\internal\server\test.c" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{07D0A1E5-175E-458F-B3A1-74437189CC5E}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -51,7 +65,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\internal\server\;$(KNET_INCLUDE)\;..\internal\protocol\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\internal\server\;$(KNET_INCLUDE)\;..\internal\protocol\;..\interface\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996;4201;4127</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -78,18 +92,6 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="..\internal\protocol\memcache_analyzer.h" />
-    <ClInclude Include="..\internal\server\db_server.h" />
-    <ClInclude Include="..\internal\server\db_space.h" />
-    <ClInclude Include="..\internal\server\server_config.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\internal\protocol\memcache_analyzer.c" />
-    <ClCompile Include="..\internal\server\db_server.c" />
-    <ClCompile Include="..\internal\server\db_space.c" />
-    <ClCompile Include="..\internal\server\test.c" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

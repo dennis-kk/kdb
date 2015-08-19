@@ -26,33 +26,47 @@
 #include "db_space.h"
 #include "memcache_analyzer.h"
 
-db_server_t*   db_server   = 0;
+kdb_server_t*   db_server   = 0;
 kloop_t*       server_loop = 0;
 ktimer_loop_t* timer_loop  = 0;
-db_space_t*    root_space  = 0;
+kdb_space_t*    root_space  = 0;
 
-struct _server_t {
-    kthread_runner_t* runner;
-    char              ip[32];
-    int               port;
-    int               root_space_buckets;
-    int               space_buckets;
-    int               channel_timeout;
-    char*             action_buffer;
-    int               timer_freq;
-    int               timer_slot;
+struct _server_plugin_t {
+    kdb_server_on_after_start_t      start_cb;
+    kdb_server_on_after_stop_t       stop_cb;
+    kdb_server_on_key_after_add_t    add_cb;
+    kdb_server_on_key_after_update_t update_cb;
+    kdb_server_on_key_before_delete_t delete_cb;
 };
 
-db_server_t* kdb_server_create() {
-    db_server_t* srv = create(db_server_t);
-    memset(srv, 0, sizeof(db_server_t));
+struct _db_server_t {
+    kthread_runner_t*   runner;
+    kdb_server_plugin_t plugin;
+    char                ip[32];
+    int                 port;
+    int                 root_space_buckets;
+    int                 space_buckets;
+    int                 channel_timeout;
+    char*               action_buffer;
+    int                 timer_freq;
+    int                 timer_slot;
+#   ifdef WIN32
+    HMODULE             plugin_handle;
+#   else
+    void*               plugin_handle;
+#   endif /* WIN32 */
+};
+
+kdb_server_t* kdb_server_create() {
+    kdb_server_t* srv = create(kdb_server_t);
+    memset(srv, 0, sizeof(kdb_server_t));
     assert(srv);
     srv->action_buffer = create_raw(ACTION_BUFFER_LENGTH);
     assert(srv->action_buffer);
     return srv;
 }
 
-void kdb_server_destroy(db_server_t* srv) {
+void kdb_server_destroy(kdb_server_t* srv) {
     assert(srv);
     if (server_loop) {
         knet_loop_destroy(server_loop);
@@ -66,11 +80,18 @@ void kdb_server_destroy(db_server_t* srv) {
     if (srv->action_buffer) {
         destroy(srv->action_buffer);
     }
+    if (srv->plugin_handle) {
+#       ifdef WIN32
+        FreeLibrary(srv->plugin_handle);
+#       else
+        dlclose(srv->plugin_handle);
+#       endif /* WIN32 */
+    }
     destroy(srv);
 }
 
 /* TODO ÃüÁîÐÐ²ÎÊý */
-int kdb_server_start(db_server_t* srv, int argc, char** argv) {
+int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     kchannel_ref_t* acceptor = 0;
     (void)argc;
     (void)argv;
@@ -106,37 +127,53 @@ int kdb_server_start(db_server_t* srv, int argc, char** argv) {
     if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", server_loop, timer_loop)) {
         return db_error_server_start_thread_fail;
     }
+#ifdef WIN32
+    kdb_server_load_plugin(srv, "db_plugin.dll");
+#else
+    kdb_server_load_plugin(srv, "db_plugin.so");
+#endif /* WIN32 */
+    if (srv->plugin.start_cb) {
+        srv->plugin.start_cb(srv);
+    }
     return db_error_ok;
 }
 
-void kdb_server_stop(db_server_t* srv) {
+void kdb_server_stop(kdb_server_t* srv) {
     assert(srv);
     thread_runner_stop(srv->runner);
 }
 
-void kdb_server_wait_for_stop(db_server_t* srv) {
+void kdb_server_wait_for_stop(kdb_server_t* srv) {
     assert(srv);
     thread_runner_join(srv->runner);
+    if (srv->plugin.stop_cb) {
+        srv->plugin.stop_cb(srv);
+    }
 }
 
-int kdb_server_get_space_buckets(db_server_t* srv) {
+int kdb_server_get_space_buckets(kdb_server_t* srv) {
     assert(srv);
     return srv->space_buckets;
 }
 
-int kdb_server_get_channel_timeout(db_server_t* srv) {
+int kdb_server_get_channel_timeout(kdb_server_t* srv) {
     assert(srv);
     return srv->channel_timeout;
 }
 
-char* kdb_server_get_action_buffer(db_server_t* srv) {
+char* kdb_server_get_action_buffer(kdb_server_t* srv) {
     assert(srv);
     return srv->action_buffer;
 }
 
-int kdb_server_get_action_buffer_length(db_server_t* srv) {
+int kdb_server_get_action_buffer_length(kdb_server_t* srv) {
     (void)srv;
     return ACTION_BUFFER_LENGTH;
+}
+
+kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv) {
+    (void)srv;
+    return root_space;
 }
 
 void acceptor_cb(kchannel_ref_t* channel, knet_channel_cb_event_e e) {
@@ -168,4 +205,85 @@ void connector_cb(kchannel_ref_t* channel, knet_channel_cb_event_e e) {
         }
         knet_channel_ref_set_ptr(channel, 0);
     }
+}
+
+kdb_server_plugin_t* kdb_server_get_plugin(kdb_server_t* srv) {
+    assert(srv);
+    return &srv->plugin;
+}
+
+void kdb_server_call_cb_on_add(kdb_server_t* srv, kdb_space_value_t* value) {
+    assert(srv);
+    assert(value);
+    if (srv->plugin.add_cb) {
+        srv->plugin.add_cb(srv, value);
+    }
+}
+
+void kdb_server_call_cb_on_delete(kdb_server_t* srv, kdb_space_value_t* value) {
+    assert(srv);
+    assert(value);
+    if (srv->plugin.delete_cb) {
+        srv->plugin.delete_cb(srv, value);
+    }
+}
+
+void kdb_server_call_cb_on_update(kdb_server_t* srv, kdb_space_value_t* value) {
+    assert(srv);
+    assert(value);
+    if (srv->plugin.update_cb) {
+        srv->plugin.update_cb(srv, value);
+    }
+}
+
+const char* get_exe_path() {
+    const static int SIZE      = 512;
+    static char      path[512] = {0};
+    int              result    = 0;
+    int              i         = 0;
+#ifdef WIN32    
+    static char  seperator = '\\';
+    GetModuleFileNameA(NULL, path, sizeof(path));
+    result = strlen(path);
+#else
+    static char  seperator = '/';
+    result = readlink("/proc/self/exe", path, sizeof(path));
+    if (result < 0 || (result >= SIZE - 1)) {
+        return 0;
+    }
+#endif // WIN32
+    path[result] = 0;
+    for (i = result; i >= 0; i--) {
+        if (path[i] == seperator) {
+            path[i] = 0;
+            break;
+        }
+    }
+    return path;
+}
+
+int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
+#	ifdef WIN32
+    SetDllDirectoryA(get_exe_path());
+    srv->plugin_handle = LoadLibraryA(file);
+    if (!srv->plugin_handle) {
+        return db_error_load_plugin;
+    }
+    srv->plugin.add_cb    = (kdb_server_on_key_after_add_t)GetProcAddress(srv->plugin_handle, "on_add");
+    srv->plugin.delete_cb = (kdb_server_on_key_before_delete_t)GetProcAddress(srv->plugin_handle, "on_delete");
+    srv->plugin.start_cb  = (kdb_server_on_after_start_t)GetProcAddress(srv->plugin_handle, "on_start");
+    srv->plugin.stop_cb   = (kdb_server_on_after_stop_t)GetProcAddress(srv->plugin_handle, "on_stop");
+    srv->plugin.update_cb = (kdb_server_on_key_after_update_t)GetProcAddress(srv->plugin_handle, "on_update");
+#	else
+	srv->plugin_handle = ::dlopen(file, RTLD_NOW);
+    if (!srv->plugin_handle) {
+        return db_error_load_plugin;
+    }
+    srv->plugin.add_cb    = (kdb_server_on_key_after_add_t)dlsym(srv->plugin_handle, "on_add");
+    srv->plugin.delete_cb = (kdb_server_on_key_before_delete_t)dlsym(srv->plugin_handle, "on_delete");
+    srv->plugin.start_cb  = (kdb_server_on_after_start_t)dlsym(srv->plugin_handle, "on_start");
+    srv->plugin.stop_cb   = (kdb_server_on_after_stop_t)dlsym(srv->plugin_handle, "on_stop");
+    srv->plugin.update_cb = (kdb_server_on_key_after_update_t)dlsym(srv->plugin_handle, "on_update");
+#	endif // WIN32
+    return db_error_ok;
 }

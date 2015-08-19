@@ -25,7 +25,7 @@
 #ifndef MEMCACHE_ANALYZER_H
 #define MEMCACHE_ANALYZER_H
 
-#include "server_config.h"
+#include "db_internal.h"
 
 /**
  * 建立memcached协议解析器
@@ -176,11 +176,11 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
  * 发布更新事件
  * @param channel kchannel_ref_t实例
  * @param path 路径
- * @param dv db_space_value_t实例
+ * @param dv kdb_space_value_t实例
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int publish_update(kchannel_ref_t* channel, const char* path, db_space_value_t* dv);
+int publish_update(kchannel_ref_t* channel, const char* path, kdb_space_value_t* dv);
 
 /**
  * 发布销毁事件
@@ -190,5 +190,39 @@ int publish_update(kchannel_ref_t* channel, const char* path, db_space_value_t* 
  * @retval 其他 失败
  */
 int publish_delete(kchannel_ref_t* channel, const char* path);
+
+#define EQUAL(a, b) \
+    !strcmp(a, b)
+
+#define EQUAL_RETURN(a, b, error) \
+    do { \
+        if (EQUAL(a, b)) { \
+            return error; \
+        } \
+    } while(0);
+
+#define NOT_EQUAL_RETURN(a, b, error) \
+    do { \
+        if (!EQUAL(a, b)) { \
+            return error; \
+        } \
+    } while(0);
+
+#define GET_FORWARD(buffer, key, size, pos, bytes, error) \
+    do { \
+        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
+        if (!bytes) { \
+            return error; \
+        } \
+        pos += bytes; \
+    } while(0);
+
+#define GET(buffer, key, size, pos, bytes, error) \
+    do { \
+        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
+        if (!bytes) { \
+            return error; \
+        } \
+    } while(0);
 
 #endif /* MEMCACHE_ANALYZER_H */
