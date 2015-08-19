@@ -12,10 +12,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\interface\db_server_api.h" />
+    <ClInclude Include="..\interface\db_server_config.h" />
     <ClInclude Include="..\internal\protocol\memcache_analyzer.h" />
     <ClInclude Include="..\internal\server\db_internal.h" />
     <ClInclude Include="..\internal\server\db_server.h" />
-    <ClInclude Include="..\internal\server\db_server_config.h" />
     <ClInclude Include="..\internal\server\db_space.h" />
   </ItemGroup>
   <ItemGroup>
