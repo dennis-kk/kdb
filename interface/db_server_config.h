@@ -44,6 +44,7 @@ typedef enum _db_error_e {
     db_error_cas_fail,                  /* CAS操作失败 */
     db_error_listen_fail,               /* 开启网络监听器失败 */
     db_error_load_plugin,               /* 加载插件失败 */
+    db_error_incr_decr_fail,            /* incr或decr不符合条件 */
 } db_error_e;
 
 typedef struct _db_server_t      kdb_server_t;

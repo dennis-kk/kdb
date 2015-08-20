@@ -35,42 +35,54 @@ enum _db_sub_type_e {
 };
 
 /**
+ * 当前路径分支的操作类型, 读操作可以并发，读-写，写-写操作不能并发
+ */
+typedef enum _db_space_op_type_e {
+    db_space_op_type_read = 1,  /* 读 */
+    db_space_op_type_write = 2, /* 写 */
+    db_space_op_type_none = 4,  /* 无操作 */
+} kdb_space_op_type_e;
+
+/**
  * 值
  */
 struct _db_value_t {
-    void*     v;            /* 属性 */
-    int       size;         /* 当前长度 */
-    int       max_size;     /* 最大长度 */
-    khash_t*  sub_channels; /* 订阅了此属性/空间的管道 */
-    uint32_t  flags;        /* memcached flags */
-    uint64_t  cas_id;       /* memcached cas unique */
+    void*    v;            /* 属性 */
+    int      size;         /* 当前长度 */
+    int      max_size;     /* 最大长度 */
+    khash_t* sub_channels; /* 订阅了此属性/空间的管道 */
+    uint32_t flags;        /* memcached flags */
+    uint64_t cas_id;       /* memcached cas unique */
+    int      dirty;        /* 脏标记 */
 };
 
 /**
  * 空间值
  */
 struct _db_space_value_t {
-    uint64_t    id;        /* UUID */
-    uint32_t    exptime;   /* memcached exptime*/
-    kdb_space_t* owner;     /* 所属空间 */
-    char*       name;      /* 空间/值名字 */
+    uint64_t     id;      /* UUID */
+    uint32_t     exptime; /* memcached exptime*/
+    kdb_space_t* owner;   /* 所属空间 */
+    char*        name;    /* 空间/值名字 */
     union {
         kdb_value_t* value; /* 属性 */
         kdb_space_t* space; /* 空间 */
     };
     kdb_space_value_type_e type; /* 类型 */
-    void* ptr; /* 用户指针，用于插件 */
+    atomic_counter_t       op;   /* 操作类型 */
+    void*                  ptr;  /* 用户指针，用于插件 */
 };
 
 /**
  * 空间
  */
 struct _db_space_t {
-    int          buckets; /* 哈希表桶的数量 */
-    khash_t*     h;       /* 哈希表 */
-    kdb_space_t*  parent;  /* 父空间 */
-    kdb_server_t* srv;     /* 服务器 */
-    char*        path;    /* 空间全路径 */
+    int              buckets; /* 哈希表桶的数量 */
+    khash_t*         h;       /* 哈希表 */
+    kdb_space_t*     parent;  /* 父空间 */
+    kdb_server_t*    srv;     /* 服务器 */
+    char*            path;    /* 空间全路径 */
+    atomic_counter_t op;      /* 操作类型 */
 };
 
 kdb_value_t* kdb_value_create(const void* value, int size) {
@@ -80,6 +92,7 @@ kdb_value_t* kdb_value_create(const void* value, int size) {
     memcpy(v->v, value, size);
     v->size     = size;
     v->max_size = size;
+    v->dirty    = 1;
     return v;
 }
 
@@ -110,6 +123,16 @@ uint32_t kdb_value_get_flags(kdb_value_t* value) {
 uint64_t kdb_value_get_cas_id(kdb_value_t* value) {
     assert(value);
     return value->cas_id;
+}
+
+int kdb_value_check_dirty(kdb_value_t* value) {
+    assert(value);
+    return value->dirty;
+}
+
+void kdb_value_clear_dirty(kdb_value_t* value) {
+    assert(value);
+    value->dirty = 0;
 }
 
 int kdb_value_subscribe(kdb_value_t* value, kchannel_ref_t* channel) {
@@ -177,6 +200,7 @@ kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner, const char* 
     memset(v, 0, sizeof(kdb_space_value_t));
     v->type  = space_value_type_value;
     v->owner = owner;
+    v->op    = db_space_op_type_none;
     v->id    = uuid_create(); /* UUID */
     v->name  = create_raw(strlen(name) + 1);
     assert(v->name);
@@ -198,6 +222,7 @@ kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* 
     memset(v, 0, sizeof(kdb_space_value_t));
     v->type  = space_value_type_space;
     v->owner = owner;
+    v->op    = db_space_op_type_none;
     v->id    = uuid_create(); /* UUID */
     v->name  = create_raw(strlen(name) + 1); /* 空间名称 */
     assert(v->name);
@@ -233,6 +258,16 @@ int kdb_space_value_check_type(kdb_space_value_t* v, kdb_space_value_type_e type
 void kdb_space_value_set_ptr(kdb_space_value_t* v, void* ptr) {
     assert(v);
     v->ptr = ptr;
+}
+
+const char* kdb_space_value_get_path(kdb_space_value_t* v) {
+    assert(v);
+    return v->owner->path;
+}
+
+const char* kdb_space_value_get_name(kdb_space_value_t* v) {
+    assert(v);
+    return v->name;
 }
 
 void* kdb_space_value_get_ptr(kdb_space_value_t* v) {
@@ -320,8 +355,8 @@ int kdb_iterate_path(kdb_space_t* space, const char* path, char* name, int* name
     return db_error_ok;
 }
 
-int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    kdb_space_value_t* v     = 0;
+int kdb_space_set_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
+    kdb_space_value_t* v    = 0;
     int               error = db_error_ok;
     assert(space);
     assert(path);
@@ -339,7 +374,8 @@ int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* ful
             return db_error_exist;
         } else if (kdb_space_value_check_type(v, space_value_type_space)) {
             if (*path) { /* 插入这个子空间 */
-                return kdb_space_set_key(v->space, path, full_path, value, size, flags, exptime);
+                *next_space = v->space;
+                return db_error_ok;
             }
             /* 重复定义用途 */
             return db_error_invalid_path;
@@ -359,7 +395,8 @@ int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* ful
             return db_error_hash_insert;
         }
         if (kdb_space_value_check_type(v, space_value_type_space)) {
-            return kdb_space_set_key(v->space, path, full_path, value, size, flags, exptime);
+            *next_space = v->space;
+            return db_error_ok;
         } else {
             kdb_server_call_cb_on_add(db_server, v);
         }
@@ -367,9 +404,9 @@ int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* ful
     return db_error_ok;
 }
 
-int kdb_space_add_key_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
+int kdb_space_add_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
     kdb_space_value_t* v     = 0;
-    int               error = db_error_ok;
+    int                error = db_error_ok;
     assert(space);
     assert(path);
     assert(name);
@@ -400,7 +437,8 @@ int kdb_space_add_key_path(kdb_space_t* space, const char* path, const char* ful
         return db_error_exist;
     } else if (kdb_space_value_check_type(v, space_value_type_space)) {
         if (*path) { /* 插入这个子空间 */
-            return kdb_space_add_key(v->space, path, full_path, value, size, flags, exptime);
+            *next_space = v->space;
+            return db_error_ok;
         }
         /* 重复定义用途 */
         return db_error_invalid_path;
@@ -409,7 +447,7 @@ int kdb_space_add_key_path(kdb_space_t* space, const char* path, const char* ful
     return db_error_invalid_type;   
 }
 
-int kdb_space_get_key_path(kdb_space_t* space, const char* path, const char* name, kdb_space_value_t** value) {
+int kdb_space_get_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kdb_space_value_t** value) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -432,13 +470,14 @@ int kdb_space_get_key_path(kdb_space_t* space, const char* path, const char* nam
         if (!*path) { /* 还未搜索到就结束于一个空间节点 */
             return db_error_path_not_found;
         }
-        return kdb_space_get_key(v->space, path, value);
+        *next_space = v->space;
+        return db_error_ok;
     }
     /* 未定义的类型 */
     return db_error_invalid_type;    
 }
 
-int kdb_space_del_key_path(kdb_space_t* space, const char* path, const char* name) {
+int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -462,13 +501,14 @@ int kdb_space_del_key_path(kdb_space_t* space, const char* path, const char* nam
         if (!*path) { /* 还未搜索到就结束于一个空间节点 */
             return db_error_path_not_found;
         }
-        return kdb_space_del_key(v->space, path);
+        *next_space = v->space;
+        return db_error_ok;
     }
     /* 未定义的类型 */
     return db_error_invalid_type;    
 }
 
-int kdb_space_update_key_path(kdb_space_t* space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id) {
+int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id) {
     kdb_space_value_t* v     = 0;
     int               error = db_error_ok;
     assert(space);
@@ -495,7 +535,8 @@ int kdb_space_update_key_path(kdb_space_t* space, const char* path, const char* 
             v->value->cas_id = cas_id;
         }
         v->value->size  = size;
-        v->value->flags = flags;        
+        v->value->flags = flags;
+        v->value->dirty = 1;
         /* TODO 重新计算过期时间 */
         v->exptime = exptime;
         /* 更新 */
@@ -515,16 +556,77 @@ int kdb_space_update_key_path(kdb_space_t* space, const char* path, const char* 
         return error;
     } else if (kdb_space_value_check_type(v, space_value_type_space)) {
         if (*path) { /* 更新这个子空间 */
-            return kdb_space_update_key(v->space, path, value, size, flags, exptime);
+            *next_space = v->space;
+            return db_error_ok;
         }
         /* 重复定义用途 */
         return db_error_invalid_path;
     }
     /* 未定义的类型 */
-    return db_error_invalid_type;   
+    return db_error_invalid_type;
 }
 
-int kdb_space_subscribe_key_path(kdb_space_t* space, const char* path, const char* name, kchannel_ref_t* channel) {
+int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, uint64_t delta, kdb_space_value_t** value) {
+    kdb_space_value_t* v          = 0;
+    int                error      = db_error_ok;
+    uint64_t           ui         = 0;
+    char               buffer[64] = {0};
+    int                new_size   = sizeof(buffer) - 1;
+    assert(space);
+    assert(path);
+    assert(name);
+    assert(value);
+    /* 查看是否存在 */
+    v = (kdb_space_value_t*)hash_get_string_key(space->h, name);
+    if (!v) {
+        return db_error_invalid_path;
+    }
+    if (kdb_space_value_check_type(v, space_value_type_value)) { /* 是一个属性 */
+        if (*path) { /* 未到达路径末尾 */
+            return db_error_invalid_path;
+        }
+        /* 更新, 递增 */
+        if (!isnumber(v->value->v, v->value->size)) {
+            return db_error_incr_decr_fail;
+        }
+        ui = atoll_s(v->value->v, v->value->size);
+        ui += delta;
+        if (!kdb_lltoa(ui, buffer, &new_size)) {
+            return db_error_incr_decr_fail;
+        }
+        /* 更新值 */
+        if (new_size > v->value->max_size) {
+            /* 扩大 */
+            v->value->max_size = new_size;
+            v->value->size     = new_size;
+            v->value->v = rcreate_raw(v->value->v, new_size);
+            assert(v->value->v);
+            memcpy(v->value->v, buffer, new_size);
+        } else {
+            if (new_size < v->value->size) { /* 空间缩小 */
+                v->value->size = new_size;
+            }
+        }
+        v->value->dirty = 1;
+        memcpy(v->value->v, buffer, new_size);
+        *value = v;
+        /* 发布更新事件 */
+        kdb_space_value_publish(v, kdb_sub_type_update);
+        kdb_server_call_cb_on_update(db_server, v);
+        return error;
+    } else if (kdb_space_value_check_type(v, space_value_type_space)) {
+        if (*path) { /* 更新这个子空间 */
+            *next_space = v->space;
+            return db_error_ok;
+        }
+        /* 重复定义用途 */
+        return db_error_invalid_path;
+    }
+    /* 未定义的类型 */
+    return db_error_invalid_type;
+}
+
+int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -545,13 +647,14 @@ int kdb_space_subscribe_key_path(kdb_space_t* space, const char* path, const cha
         if (!*path) { /* 还未搜索到就结束于一个空间节点 */
             return db_error_path_not_found;
         }
-        return kdb_space_subscribe_key(v->space, path, channel);
+        *next_space = v->space;
+        return db_error_ok;
     }
     /* 未定义的类型 */
     return db_error_invalid_type;   
 }
 
-int kdb_space_add_space_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, uint32_t exptime) {
+int kdb_space_add_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* full_path, const char* name, uint32_t exptime) {
     kdb_space_value_t* v     = 0;
     int               error = db_error_ok;
     assert(space);
@@ -565,7 +668,8 @@ int kdb_space_add_space_path(kdb_space_t* space, const char* path, const char* f
             return db_error_exist;
         } else if (kdb_space_value_check_type(v, space_value_type_space)) {
             if (*path) { /* 插入这个子空间 */
-                return kdb_space_add_space(v->space, path, full_path, exptime);
+                *next_space = v->space;
+                return db_error_ok;
             }
             /* 已经存在 */
             return db_error_invalid_path;
@@ -582,13 +686,14 @@ int kdb_space_add_space_path(kdb_space_t* space, const char* path, const char* f
         }
         kdb_server_call_cb_on_add(db_server, v);
         if (*path) { /* 还未结束 */
-            return kdb_space_add_space(v->space, path, full_path, exptime);
+            *next_space = v->space;
+            return db_error_ok;
         }
     }
     return db_error_ok;
 }
 
-int kdb_space_get_space_path(kdb_space_t* space, const char* path, const char* name, kdb_space_t** child) {
+int kdb_space_get_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kdb_space_t** child) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -602,7 +707,8 @@ int kdb_space_get_space_path(kdb_space_t* space, const char* path, const char* n
         return db_error_invalid_type;
     } else if (kdb_space_value_check_type(v, space_value_type_space)) {
         if (*path) { /* 还未结束，继续搜索 */
-            return kdb_space_get_space(v->space, path, child);
+            *next_space = v->space;
+            return db_error_ok;
         }
         *child = v->space;
         return db_error_ok;
@@ -611,7 +717,7 @@ int kdb_space_get_space_path(kdb_space_t* space, const char* path, const char* n
     return db_error_invalid_type;
 }
 
-int kdb_space_del_space_path(kdb_space_t* space, const char* path, const char* name) {
+int kdb_space_del_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -625,7 +731,8 @@ int kdb_space_del_space_path(kdb_space_t* space, const char* path, const char* n
         return db_error_invalid_type;
     } else if (kdb_space_value_check_type(v, space_value_type_space)) {
         if (*path) { /* 还未结束，继续搜索 */
-            return kdb_space_del_space(v->space, path);
+            *next_space = v->space;
+            return db_error_ok;
         }
         kdb_server_call_cb_on_delete(db_server, v);
         if (error_ok != hash_delete_string_key(space->h, name)) {
@@ -637,7 +744,7 @@ int kdb_space_del_space_path(kdb_space_t* space, const char* path, const char* n
     return db_error_invalid_type;    
 }
 
-int kdb_space_subscribe_space_path(kdb_space_t* space, const char* path, const char* name, kchannel_ref_t* channel) {
+int kdb_space_subscribe_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel) {
     kdb_space_value_t* v  = 0;
     assert(space);
     assert(path);
@@ -652,7 +759,8 @@ int kdb_space_subscribe_space_path(kdb_space_t* space, const char* path, const c
         return db_error_path_need_space_but_value;
     } else if (kdb_space_value_check_type(v, space_value_type_space)) { /* 空间 */
         if (*path) { /* 还未结束继续搜索 */
-            return kdb_space_subscribe(v->space, path, channel);
+            *next_space = v->space;
+            return db_error_ok;
         }
         /* 找到，订阅整个空间 */
         return kdb_space_value_subscribe_space(v, channel);
@@ -661,7 +769,7 @@ int kdb_space_subscribe_space_path(kdb_space_t* space, const char* path, const c
     return db_error_invalid_type;
 }
 
-int kdb_space_forget_key_path(kdb_space_t* space, const char* path, const char* name, kchannel_ref_t* channel) {
+int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel) {
     kdb_space_value_t* v = 0;
     assert(space);
     assert(path);
@@ -682,13 +790,14 @@ int kdb_space_forget_key_path(kdb_space_t* space, const char* path, const char* 
         if (!*path) { /* 还未搜索到就结束于一个空间节点 */
             return db_error_path_not_found;
         }
-        return kdb_space_forget_key(v->space, path, channel);
+        *next_space = v->space;
+        return db_error_ok;
     }
     /* 未定义的类型 */
     return db_error_invalid_type;    
 }
 
-int kdb_space_forget_space_path(kdb_space_t* space, const char* path, const char* name, kchannel_ref_t* channel) {
+int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel) {
     kdb_space_value_t* v  = 0;
     assert(space);
     assert(path);
@@ -710,7 +819,8 @@ int kdb_space_forget_space_path(kdb_space_t* space, const char* path, const char
             /* 空间下所有属性 */
             return kdb_space_value_forget_space(v, channel);
         }
-        return kdb_space_forget(v->space, path, channel);
+        *next_space = v->space;
+        return db_error_ok;
     }
     /* 未定义的类型 */
     return db_error_invalid_type;
@@ -736,182 +846,332 @@ void kdb_space_destroy(kdb_space_t* space) {
 }
 
 int kdb_space_set_key(kdb_space_t* space, const char* path, const char* full_path, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          pos        = 0;
+    int          error      = db_error_ok;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(value);
     assert(size);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_set_key_path(space, path + i, full_path, name, value, size, flags, exptime);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_set_key_path(space, &next_space, path + pos, full_path, name, value, size, flags, exptime);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
-int kdb_space_add_key(kdb_space_t* space, const char* path, const char* full_path, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+int kdb_space_add_key(kdb_space_t* space, const char* path, const void* value, int size, uint32_t flags, uint32_t exptime) {
+    int          i          = 0;
+    int          pos        = 0;
+    int          error      = db_error_ok;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(value);
     assert(size);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_add_key_path(space, path + i, full_path, name, value, size, flags, exptime);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_add_key_path(space, &next_space, path + pos, name, value, size, flags, exptime);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_get_key(kdb_space_t* space, const char* path, kdb_space_value_t** value) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(value);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_get_key_path(space, path + i, name, value);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_get_key_path(space, &next_space, path + pos, name, value);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_del_key(kdb_space_t* space, const char* path) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_del_key_path(space, path + i, name);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_del_key_path(space, &next_space, path + pos, name);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
-int kdb_space_update_key(kdb_space_t* space, const char* path, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+int kdb_space_update_key(kdb_space_t* space, const char* path, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id) {
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(value);
     assert(size);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_update_key_path(space, path + i, name, value, size, flags, exptime, 0);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_update_key_path(space, &next_space, path + pos, name, value, size, flags, exptime, cas_id);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_cas_key(kdb_space_t* space, const char* path, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    return kdb_space_update_key(space, path, value, size, flags, exptime, cas_id);
+}
+
+int kdb_space_incr_key(kdb_space_t* space, const char* path, uint64_t delta, kdb_space_value_t** value) {
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(value);
-    assert(size);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_update_key_path(space, path + i, name, value, size, flags, exptime, cas_id);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_incr_decr_key_path(space, &next_space, path + pos, name, delta, value);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
+int kdb_space_decr_key(kdb_space_t* space, const char* path, uint64_t delta, kdb_space_value_t** value) {
+    return kdb_space_incr_key(space, path, delta, value);
+}
+
 int kdb_space_subscribe_key(kdb_space_t* space, const char* path, kchannel_ref_t* channel) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(channel);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_subscribe_key_path(space, path + i, name, channel);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_subscribe_key_path(space, &next_space, path + pos, name, channel);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_forget_key(kdb_space_t* space, const char* path, kchannel_ref_t* channel) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(channel);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_forget_key_path(space, path + i, name, channel);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_forget_key_path(space, &next_space, path + pos, name, channel);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_subscribe(kdb_space_t* space, const char* path, kchannel_ref_t* channel) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_subscribe_space_path(space, path + i, name, channel);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_subscribe_space_path(space, &next_space, path + pos, name, channel);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_forget(kdb_space_t* space, const char* path, kchannel_ref_t* channel) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_forget_space_path(space, path + i, name, channel);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_forget_space_path(space, &next_space, path + pos, name, channel);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_add_space(kdb_space_t* space, const char* path, const char* full_path, uint32_t exptime) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_add_space_path(space, path + i, full_path, name, exptime);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_add_space_path(space, &next_space, path + pos, full_path, name, exptime);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_get_space(kdb_space_t* space, const char* path, kdb_space_t** child) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
     assert(child);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_get_space_path(space, path + i, name, child);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_get_space_path(space, &next_space, path + pos, name, child);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
 
 int kdb_space_del_space(kdb_space_t* space, const char* path) {
-    int  i                       = 0;
-    int  error                   = db_error_ok;
+    int          i          = 0;
+    int          error      = db_error_ok;
+    int          pos        = 0;
+    kdb_space_t* next_space = 0;
     char name[MAX_NAME_SIZE + 1] = {0};
     assert(space);
     assert(path);
-    error = kdb_iterate_path(space, path, name, &i);
-    if (db_error_ok == error) {
-        error = kdb_space_del_space_path(space, path + i, name);
+    while (path[pos]) {
+        /* 遍历路径，去下一个单词 */
+        error = kdb_iterate_path(space, path + pos, name, &i);
+        if (db_error_ok != error) {
+            return db_error_invalid_format;
+        }
+        pos += i;
+        error = kdb_space_del_space_path(space, &next_space, path + pos, name);
+        if (db_error_ok != error) {
+            break;
+        }
+        space = next_space;
     }
     return error;
 }
@@ -922,4 +1182,57 @@ kdb_server_t* kdb_space_get_server(kdb_space_t* space) {
 
 int kdb_space_get_buckets(kdb_space_t* space) {
     return space->buckets;
+}
+
+int isnumber(void* s, int size) {
+    char* p = (char*)s;
+    if (*p == '-') {
+        p++;
+        size--;
+    }
+    while ((*p >= '0') && (*p <= '9') && size) {
+        p++;
+        size--;
+    }
+    return (size ? 0 : 1);
+}
+
+#ifdef WIN32
+long long atoll_s(void* s, int size) {  
+    int       minus = 0;
+    long long value = 0;
+    char*     p     = (char*)s;
+    if (*p == '-') {
+        minus++;
+        p++;
+        size--;
+    }
+    while ((*p >= '0') && (*p <= '9') && size) {
+        value *= 10;
+        value += *p - '0';
+        p++;
+        size--;
+    }
+    return minus ? 0 - value : value;
+}
+#endif /* WIN32 */
+
+char* kdb_lltoa(long long ll, char* buffer, int* size) {
+    int len = 0;
+    assert(buffer);
+    assert(size);
+#if defined(WIN32)
+    len = _snprintf(buffer, *size, "%lld", ll);
+    if ((len >= *size) || (len < 0)) {
+        return 0;
+    }
+#else
+    len = snprintf(buffer, *size, "%lld", ll);
+    if (len <= 0) {
+        return 0;
+    }
+#endif /* WIN32 */
+    buffer[len] = 0;
+    *size = len;
+    return buffer;
 }

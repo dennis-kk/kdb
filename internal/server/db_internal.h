@@ -57,10 +57,41 @@ typedef struct _memcache_analyzer_t memcache_analyzer_t;
 #define MAX_KEYS                   128                /* gets命令最大键数量 */
 #define CHANGE_VALUE_LENGTH        64                 /* memcached incr, decr值字段最大长度 */
 #define MEMCACHED_CRLF             "\r\n"             /* memcached协议分割 */
+#define MEMCACHED_NOREPLY          "noreply"          /* memcached noreply */
 
 extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */
 extern kloop_t*       server_loop; /* 网络循环 */
 extern ktimer_loop_t* timer_loop;  /* 定时器循环 */
+
+#if !defined(WIN32)
+#include <sched.h>
+#endif /* !defined(WIN32) */
+
+/*! 锁住路径 */
+#ifdef WIN32
+#define lock_path(c, require, op) \
+    do { \
+        while (op != atomic_counter_cas(&c, require, op)) { \
+            SwitchToThread(); \
+        } \
+    } while(0);
+#else
+    do { \
+        while (op != atomic_counter_cas(&c, require, op)) { \
+            sched_yield(); \
+        } \
+    } while(0);
+#endif /* WIN32 */
+
+/*! 解锁路径, 同一路径可以被重复解锁 */
+#define unlock_path(c) \
+    do { \
+        atomic_counter_set(&c, db_space_op_type_none); \
+    } while(0);
+
+#define unlock_return(c, expr) \
+    unlock_path(c); \
+    return expr;
 
 #endif /* DB_INTERNAL_H */

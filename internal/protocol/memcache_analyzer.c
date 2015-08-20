@@ -73,8 +73,8 @@ struct _memcache_analyzer_t {
     int               key_count;                              /* gets键的数量 */
     char              change_value_char[CHANGE_VALUE_LENGTH]; /* incr, decr值*/
     uint64_t          change_value;                           /* incr, decr值*/
-    kdb_space_value_t* return_value;                           /* get返回的值*/
-    kdb_space_value_t* return_value_array[MAX_KEYS];           /* gets返回的值数组*/
+    kdb_space_value_t* return_value;                          /* get返回的值*/
+    kdb_space_value_t* return_value_array[MAX_KEYS];          /* gets返回的值数组*/
 };
 
 memcache_analyzer_t* memcache_analyzer_create() {
@@ -137,6 +137,7 @@ int memcache_analyzer_do_analyze_incr_decr(memcache_analyzer_t* mc, const char* 
     mc->change_value = atoll(mc->change_value_char);
     /* noreply */
     EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
@@ -155,6 +156,7 @@ int memcache_analyzer_do_analyze_sub(memcache_analyzer_t* mc, const char* buffer
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
     EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
@@ -173,6 +175,7 @@ int memcache_analyzer_do_analyze_leave(memcache_analyzer_t* mc, const char* buff
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
     EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
@@ -190,6 +193,7 @@ int memcache_analyzer_do_analyze_delete(memcache_analyzer_t* mc, const char* buf
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
     EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n */
+    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
@@ -242,6 +246,7 @@ int memcache_analyzer_do_analyze_store(memcache_analyzer_t* mc, const char* buff
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
     EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n?*/
+    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
@@ -306,7 +311,7 @@ int memcache_analyzer_analyze_command_line(memcache_analyzer_t* mc, const char* 
             }
             break;
         }
-        case 'f': { /* leavekey, leave */
+        case 'l': { /* leavekey, leave */
             if (EQUAL(mc->command, "leavekey")) {
                 mc->command_type = command_type_leavekey;
                 error = memcache_analyzer_do_analyze_leave(mc, buffer, pos);
@@ -392,8 +397,6 @@ int memcache_analyzer_analyze_command_line(memcache_analyzer_t* mc, const char* 
  * TODO:
  * command_type_append
  * command_type_prepend
- * command_type_incr
- * command_type_decr
  */
 
 int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channel) {
@@ -404,13 +407,13 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
             error = kdb_space_set_key(root_space, mc->key, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_add: /* add */
-            error = kdb_space_add_key(root_space, mc->key, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
+            error = kdb_space_add_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_addspace: /* addspace */
             error = kdb_space_add_space(root_space, mc->key, mc->key, mc->exptime);
             break;
         case command_type_replace: /* replace */
-            error = kdb_space_update_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
+            error = kdb_space_update_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, 0);
             break;
         case command_type_cas: /* cas */
             error = kdb_space_cas_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, mc->cas_unique);
@@ -445,6 +448,12 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
         case command_type_leave: /* leave */
             error = kdb_space_forget(root_space, mc->key, channel);
             break;
+        case command_type_incr: /* incr */
+            error = kdb_space_incr_key(root_space, mc->key, mc->change_value, &mc->return_value);
+            break;
+        case command_type_decr: /* decr */
+            error = kdb_space_decr_key(root_space, mc->key, -1 * mc->change_value, &mc->return_value);
+            break;
         default:
             error = db_error_command_not_impl;
     }
@@ -452,7 +461,7 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
 }
 
 void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, int error) {
-    int         i = 0;
+    int          i = 0;
     kdb_value_t* v = 0;
     kstream_t* stream = knet_channel_ref_get_stream(channel);
     if (mc->noreply) {
@@ -460,13 +469,16 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
     }
     switch (error) {
         case db_error_invalid_format:
-            knet_stream_push_varg(stream, "CLIENT_ERROR %s:%s\r\n", "invalid command format", mc->command_line);
+            knet_stream_push_varg(stream, "CLIENT_ERROR (%s:%s)\r\n", "invalid command format", mc->command_line);
             return;
         case db_error_unknown_command:
             knet_stream_push_varg(stream, "ERROR\r\n");
             return;
         case db_error_command_not_impl:
-            knet_stream_push_varg(stream, "SERVER_ERROR %s:%s\r\n", "command not implemented", mc->command);
+            knet_stream_push_varg(stream, "SERVER_ERROR (%s:%s)\r\n", "command not implemented", mc->command);
+            return;
+        case db_error_incr_decr_fail:
+            knet_stream_push_varg(stream, "SERVER_ERROR (%s)\r\n", mc->command_line);
             return;
         default:
             break;
@@ -483,7 +495,7 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
             case command_type_get:
                 if (mc->return_value) {
                     v = kdb_space_value_get_value(mc->return_value);
-                    knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->key, 0, kdb_value_get_size(v));
+                    knet_stream_push_varg(stream, "VALUE %s %lld %d\r\n", mc->key, kdb_value_get_cas_id(v), kdb_value_get_size(v));
                     knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
                     knet_stream_push_varg(stream, "\r\n");
                 }
@@ -493,12 +505,18 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
                 for (i = 0; i < mc->key_count; i++) {
                     if (mc->return_value_array[i]) {
                         v = kdb_space_value_get_value(mc->return_value_array[i]);
-                        knet_stream_push_varg(stream, "VALUE %s %d %d\r\n", mc->keys[i], 0, kdb_value_get_size(v));
+                        knet_stream_push_varg(stream, "VALUE %s %lld %d\r\n", mc->keys[i], kdb_value_get_cas_id(v), kdb_value_get_size(v));
                         knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
                         knet_stream_push_varg(stream, "\r\n");
                     }
                 }
                 knet_stream_push_varg(stream, "END\r\n");
+                break;
+            case command_type_incr:
+            case command_type_decr:
+                v = kdb_space_value_get_value(mc->return_value);
+                knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
+                knet_stream_push_varg(stream, "\r\n");
                 break;
             case command_type_delete:
             case command_type_deletespace:
@@ -538,6 +556,10 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
             case command_type_sub:
             case command_type_leavekey:
             case command_type_leave:
+                knet_stream_push_varg(stream, "NOT_FOUND\r\n");
+                break;
+            case command_type_incr:
+            case command_type_decr:
                 knet_stream_push_varg(stream, "NOT_FOUND\r\n");
                 break;
             default:

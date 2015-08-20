@@ -206,6 +206,7 @@ int kdb_iterate_path(kdb_space_t* space, const char* path, char* name, int* name
 /**
  * 向空间内添加属性值, 如果路径不存在自动建立
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param full_path 全路径
  * @param name 当前路径
@@ -216,13 +217,13 @@ int kdb_iterate_path(kdb_space_t* space, const char* path, char* name, int* name
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
+int kdb_space_set_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
 
 /**
  * 向空间内添加属性值
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
- * @param full_path 全路径
  * @param name 当前路径
  * @param value 属性值指针
  * @param size 属性值长度
@@ -231,32 +232,35 @@ int kdb_space_set_key_path(kdb_space_t* space, const char* path, const char* ful
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_add_key_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
+int kdb_space_add_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
 
 /**
  * 获取空间内属性值
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @param value 空间值指针返回
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_get_key_path(kdb_space_t* space, const char* path, const char* name, kdb_space_value_t** value);
+int kdb_space_get_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kdb_space_value_t** value);
 
 /**
  * 删除并销毁空间内属性值
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_del_key_path(kdb_space_t* space, const char* path, const char* name);
+int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name);
 
 /**
  * 更新空间内属性值
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @param value 属性值指针
@@ -267,11 +271,29 @@ int kdb_space_del_key_path(kdb_space_t* space, const char* path, const char* nam
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_update_key_path(kdb_space_t* space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id);
+int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id);
+
+/**
+ * 递增空间内属性值
+ * @param space 当前空间
+ * @param next_space 下层空间
+ * @param path 路径
+ * @param name 当前路径
+ * @param delta 递增的值
+ * @param value 属性值指针返回
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, uint64_t delta, kdb_space_value_t** value);
+
+int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
+int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
+int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
 
 /**
  * 添加子孙空间
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param full_path 全路径
  * @param name 当前路径
@@ -279,39 +301,64 @@ int kdb_space_update_key_path(kdb_space_t* space, const char* path, const char* 
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_add_space_path(kdb_space_t* space, const char* path, const char* full_path, const char* name, uint32_t exptime);
+int kdb_space_add_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* full_path, const char* name, uint32_t exptime);
 
 /**
  * 获取子孙空间
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @param child 子孙空间指针返回
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_get_space_path(kdb_space_t* space, const char* path, const char* name, kdb_space_t** child);
+int kdb_space_get_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kdb_space_t** child);
 
 /**
  * 销毁子孙空间
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_del_space_path(kdb_space_t* space, const char* path, const char* name);
+int kdb_space_del_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name);
 
 /**
  * 订阅子孙空间
  * @param space 当前空间
+ * @param next_space 下层空间
  * @param path 路径
  * @param name 当前路径
  * @param channel 订阅管道
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_subscribe_space_path(kdb_space_t* space, const char* path, const char* name, kchannel_ref_t* channel);
+int kdb_space_subscribe_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
+
+/**
+ * 检查内存块是否为字符串描述的数字
+ * @param s 内存块指针
+ * @param size 内存块长度
+ * @retval 0 不是
+ * @retval 1 是
+ */
+int isnumber(void* s, int size);
+
+/**
+ * long long转换为字符串
+ * @param ll long long
+ * @param buffer 转换后存放的缓冲区
+ * @param size 缓冲区长度
+ * @return 转换后的字符串指针
+ */
+char* kdb_lltoa(long long ll, char* buffer, int* size);
+
+#ifdef WIN32
+long long atoll_s(void* s, int size);
+#endif /* WIN32 */
 
 #define for_each_char(c, s) \
     for (c = *s++; (c); c = *s++)

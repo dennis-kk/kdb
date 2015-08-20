@@ -48,7 +48,7 @@ extern kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv);
  * @param value 属性值
  * @param size 属性值长度
  * @param flags memcached flags
- * @param exptime memcached exptime
+ * @param exptime memcached exptime(未来距离当前的秒数)
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
@@ -59,16 +59,15 @@ extern int kdb_space_set_key(kdb_space_t* space, const char* path, const char* f
  * 向空间增加属性
  * @param space kdb_space_t实例
  * @param path 路径
- * @param full_path 全路径
  * @param value 属性值
  * @param size 属性值长度
  * @param flags memcached flags
- * @param exptime memcached exptime
+ * @param exptime memcached exptime(未来距离当前的秒数)
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-extern int kdb_space_add_key(kdb_space_t* space, const char* path, const char* full_path,
-    const void* value, int size, uint32_t flags, uint32_t exptime);
+extern int kdb_space_add_key(kdb_space_t* space, const char* path, const void* value,
+    int size, uint32_t flags, uint32_t exptime);
 
 /**
  * 获取空间属性值
@@ -96,12 +95,13 @@ extern int kdb_space_del_key(kdb_space_t* space, const char* path);
  * @param value 属性值
  * @param size 属性值长度
  * @param flags memcached flags
- * @param exptime memcached exptime
+ * @param exptime memcached exptime(未来距离当前的秒数)
+ * @param cas_id memcached cas unique
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
 extern int kdb_space_update_key(kdb_space_t* space, const char* path, const void* value,
-    int size, uint32_t flags, uint32_t exptime);
+    int size, uint32_t flags, uint32_t exptime, uint64_t cas_id);
 
 /**
  * 实现memcache cas(check&set)功能
@@ -110,13 +110,36 @@ extern int kdb_space_update_key(kdb_space_t* space, const char* path, const void
  * @param value 属性值
  * @param size 属性值长度
  * @param flags memcached flags
- * @param exptime memcached exptime
+ * @param exptime memcached exptime(未来距离当前的秒数)
  * @param cas_id memcached cas unique
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
 extern int kdb_space_cas_key(kdb_space_t* space, const char* path, const void* value,
     int size, uint32_t flags, uint32_t exptime, uint64_t cas_id);
+
+/**
+ * 实现memcache incr功能
+ * @param space kdb_space_t实例
+ * @param path 路径
+ * @param delta 递增值
+ * @param value 属性值指针返回
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+extern int kdb_space_incr_key(kdb_space_t* space, const char* path, uint64_t delta, kdb_space_value_t** value);
+
+/**
+ * 实现memcache decr功能
+ * @param space kdb_space_t实例
+ * @param path 路径
+ * @param delta 递减值
+ * @param value 属性值指针返回
+ * @param size 属性值长度返回
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+extern int kdb_space_decr_key(kdb_space_t* space, const char* path, uint64_t delta, kdb_space_value_t** value);
 
 /**
  * 添加子空间
@@ -165,6 +188,20 @@ extern int kdb_space_value_check_type(kdb_space_value_t* v, kdb_space_value_type
 extern void kdb_space_value_set_ptr(kdb_space_value_t* v, void* ptr);
 
 /**
+ * 设置空间路径
+ * @param v kdb_space_value_t实例
+ * @param 空间路径
+ */
+extern const char* kdb_space_value_get_path(kdb_space_value_t* v);
+
+/**
+ * 取得空间值名字
+ * @param v kdb_space_value_t实例
+ * @return 空间值名字
+ */
+extern const char* kdb_space_value_get_name(kdb_space_value_t* v);
+
+/**
  * 取得用户指针
  * @param v kdb_space_value_t实例
  * @return 用户指针
@@ -205,6 +242,20 @@ extern uint32_t kdb_value_get_flags(kdb_value_t* value);
  * @return memcached cas unique
  */
 extern uint64_t kdb_value_get_cas_id(kdb_value_t* value);
+
+/**
+ * 检查值的脏标记
+ * @param value kdb_value_t实例
+ * @retval 非零 脏
+ * @retval 0 非脏
+ */
+extern int kdb_value_check_dirty(kdb_value_t* value);
+
+/**
+ * 重置脏标记
+ * @param value kdb_value_t实例
+ */
+extern void kdb_value_clear_dirty(kdb_value_t* value);
 
 #ifdef __cplusplus
 }
