@@ -257,6 +257,12 @@ extern int kdb_value_check_dirty(kdb_value_t* value);
  */
 extern void kdb_value_clear_dirty(kdb_value_t* value);
 
+/* TODO ±£¡Ù*/
+extern int kdb_space_incref(kdb_space_t* space);
+extern int kdb_space_decref(kdb_space_t* space);
+extern int kdb_space_value_incref(kdb_space_value_t* v);
+extern int kdb_space_value_decref(kdb_space_value_t* v);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

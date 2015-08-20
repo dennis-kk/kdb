@@ -194,14 +194,13 @@ void sub_dtor(void* v);
 
 /**
  * 路径字符串遍历函数
- * @param space 当前空间
  * @param path 路径
  * @param name 当前路径
  * @param name_len 当前路径长度
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_iterate_path(kdb_space_t* space, const char* path, char* name, int* name_len);
+int kdb_iterate_path(const char* path, char* name, int* name_len);
 
 /**
  * 向空间内添加属性值, 如果路径不存在自动建立
@@ -286,8 +285,40 @@ int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, cons
  */
 int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, uint64_t delta, kdb_space_value_t** value);
 
+/**
+ * 订阅属性值
+ * @param space 当前空间
+ * @param next_space 下层空间
+ * @param path 路径
+ * @param name 当前路径
+ * @param channel 订阅的管道
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
 int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
+
+/**
+ * 取消订阅属性值
+ * @param space 当前空间
+ * @param next_space 下层空间
+ * @param path 路径
+ * @param name 当前路径
+ * @param channel 订阅的管道
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
 int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
+
+/**
+ * 取消订阅空间
+ * @param space 当前空间
+ * @param next_space 下层空间
+ * @param path 路径
+ * @param name 当前路径
+ * @param channel 订阅的管道
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
 int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, kchannel_ref_t* channel);
 
 /**
@@ -357,9 +388,16 @@ int isnumber(void* s, int size);
 char* kdb_lltoa(long long ll, char* buffer, int* size);
 
 #ifdef WIN32
+/**
+ * 字符串转long long
+ * @param s 字符串
+ * @param size 长度
+ * @return long long
+ */
 long long atoll_s(void* s, int size);
 #endif /* WIN32 */
 
+/*! 字符串遍历宏 */
 #define for_each_char(c, s) \
     for (c = *s++; (c); c = *s++)
 

@@ -29,12 +29,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if !defined(WIN32)
+#include <sched.h>
+#endif /* !defined(WIN32) */
+
 #include "knet.h"
 #include "db_server_config.h"
 
 typedef enum _db_sub_type_e         kdb_sub_type_e;
 typedef struct _server_plugin_t     kdb_server_plugin_t;
 typedef struct _memcache_analyzer_t memcache_analyzer_t;
+
+typedef struct _spinlock_t {
+    atomic_counter_t value;
+    atomic_counter_t default_value;
+} kdb_spinlock_t;
 
 #define DOT                        '.'                /* 路径分隔符 */
 #define MAX_NAME_SIZE              32                 /* 子路径的最大名字长度 */
@@ -63,35 +72,5 @@ extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */
 extern kloop_t*       server_loop; /* 网络循环 */
 extern ktimer_loop_t* timer_loop;  /* 定时器循环 */
-
-#if !defined(WIN32)
-#include <sched.h>
-#endif /* !defined(WIN32) */
-
-/*! 锁住路径 */
-#ifdef WIN32
-#define lock_path(c, require, op) \
-    do { \
-        while (op != atomic_counter_cas(&c, require, op)) { \
-            SwitchToThread(); \
-        } \
-    } while(0);
-#else
-    do { \
-        while (op != atomic_counter_cas(&c, require, op)) { \
-            sched_yield(); \
-        } \
-    } while(0);
-#endif /* WIN32 */
-
-/*! 解锁路径, 同一路径可以被重复解锁 */
-#define unlock_path(c) \
-    do { \
-        atomic_counter_set(&c, db_space_op_type_none); \
-    } while(0);
-
-#define unlock_return(c, expr) \
-    unlock_path(c); \
-    return expr;
 
 #endif /* DB_INTERNAL_H */
