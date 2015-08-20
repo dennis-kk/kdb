@@ -28,6 +28,15 @@ User can write the plugin to hook the event in `kdb` process, the plugin is a co
 	/*! called before delete attribute */
 	typedef int (*kdb_server_on_key_before_delete_t)(kdb_server_t*, kdb_space_value_t*);
 
+The expose API symbol name:
+
+	 on_start
+	 on_stop
+	 on_add
+	 on_update
+	 on_delete
+
+
 # exptime
 The `exptime` of memcached for now is not implemented, please set `exptime` to zero.
 
