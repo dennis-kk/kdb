@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #if !defined(WIN32)
 #include <sched.h>
@@ -69,6 +70,7 @@ typedef struct _spinlock_t {
 #define MEMCACHED_CRLF             "\r\n"             /* memcached协议分割 */
 #define MEMCACHED_NOREPLY          "noreply"          /* memcached noreply */
 #define ROOT_SPACE                 "root"             /* 根空间名称 */
+#define PLUGIN_MAX_PATH            250                /* 插件路径最大长度 */
 
 extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */

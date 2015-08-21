@@ -1275,7 +1275,6 @@ int isnumber(void* s, int size) {
     return (size ? 0 : 1);
 }
 
-#ifdef WIN32
 long long atoll_s(void* s, int size) {  
     int       minus = 0;
     long long value = 0;
@@ -1293,7 +1292,6 @@ long long atoll_s(void* s, int size) {
     }
     return minus ? 0 - value : value;
 }
-#endif /* WIN32 */
 
 char* kdb_lltoa(long long ll, char* buffer, int* size) {
     int len = 0;

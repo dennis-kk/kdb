@@ -27,21 +27,22 @@
 #include "memcache_analyzer.h"
 
 kdb_server_t*   db_server   = 0;
-kloop_t*       server_loop = 0;
-ktimer_loop_t* timer_loop  = 0;
+kloop_t*        server_loop = 0;
+ktimer_loop_t*  timer_loop  = 0;
 kdb_space_t*    root_space  = 0;
 
 struct _server_plugin_t {
-    kdb_server_on_after_start_t      start_cb;
-    kdb_server_on_after_stop_t       stop_cb;
-    kdb_server_on_key_after_add_t    add_cb;
-    kdb_server_on_key_after_update_t update_cb;
+    kdb_server_on_after_start_t       start_cb;
+    kdb_server_on_after_stop_t        stop_cb;
+    kdb_server_on_key_after_add_t     add_cb;
+    kdb_server_on_key_after_update_t  update_cb;
     kdb_server_on_key_before_delete_t delete_cb;
 };
 
 struct _db_server_t {
     kthread_runner_t*   runner;
     kdb_server_plugin_t plugin;
+    char                plugin_path[PLUGIN_MAX_PATH];
     char                ip[32];
     int                 port;
     int                 root_space_buckets;
@@ -90,12 +91,8 @@ void kdb_server_destroy(kdb_server_t* srv) {
     destroy(srv);
 }
 
-/* TODO 命令行参数 */
-int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
-    kchannel_ref_t* acceptor = 0;
-    (void)argc;
-    (void)argv;
-    assert(srv);
+void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv) {
+    int i = 1;
     /* 默认值 */
     srv->root_space_buckets = ROOT_SPACE_DEFAULT_BUCKETS;
     srv->space_buckets      = SPACE_DEFAULT_BUCKETS;
@@ -104,6 +101,54 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     srv->timer_freq         = TIMER_DEFAULT_FREQ;
     srv->timer_slot         = TIMER_DEFAULT_SLOT;
     strcpy(srv->ip, SERVER_DEFAULT_IP);
+    /* 命令行参数 */
+    if (argc < 2) {
+        return;
+    }
+    for (; i < argc;) {
+        if (EQUAL(argv[i], "-ip")) {
+            if (i + 1 < argc) {
+                strcpy(srv->ip, argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-port")) {
+            if (i + 1 < argc) {
+                srv->port = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-channel-timeout")) {
+            if (i + 1 < argc) {
+                srv->channel_timeout = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-root-buckets")) {
+            if (i + 1 < argc) {
+                srv->root_space_buckets = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-space-buckets")) {
+            if (i + 1 < argc) {
+                srv->space_buckets = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-timer-freq")) {
+            if (i + 1 < argc) {
+                srv->timer_freq = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-timer-slot")) {
+            if (i + 1 < argc) {
+                srv->timer_slot = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-plugin")) {
+            if (i + 1 < argc) {
+                strcpy(srv->plugin_path, argv[++i]);
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
+    kchannel_ref_t* acceptor = 0;
+    assert(srv);
+    /* 命令行参数 */
+    kdb_server_parse_command_line(srv, argc, argv);
     /* 建立根空间 */
     root_space = kdb_space_create(0, srv, srv->root_space_buckets);
     assert(root_space);
@@ -114,6 +159,7 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     acceptor = knet_loop_create_channel(server_loop, 128, ACTION_BUFFER_LENGTH);
     assert(acceptor);
     knet_channel_ref_set_cb(acceptor, acceptor_cb);
+    printf("Starting @ %s:%d...\n", srv->ip, srv->port);
     if (error_ok != knet_channel_ref_accept(acceptor, srv->ip, srv->port, 1024)) {
         return db_error_listen_fail;
     }
@@ -127,11 +173,15 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", server_loop, timer_loop)) {
         return db_error_server_start_thread_fail;
     }
-#ifdef WIN32
-    kdb_server_load_plugin(srv, "db_plugin.dll");
-#else
-    kdb_server_load_plugin(srv, "db_plugin.so");
-#endif /* WIN32 */
+    if (srv->plugin_path[0]) {
+        kdb_server_load_plugin(srv, srv->plugin_path);
+    } else {
+#       ifdef WIN32
+        kdb_server_load_plugin(srv, "db_plugin.dll");
+#       else
+        kdb_server_load_plugin(srv, "db_plugin.so");
+#       endif /* WIN32 */
+    }
     if (srv->plugin.start_cb) {
         srv->plugin.start_cb(srv);
     }
@@ -140,12 +190,16 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
 
 void kdb_server_stop(kdb_server_t* srv) {
     assert(srv);
-    thread_runner_stop(srv->runner);
+    if (srv->runner) {
+        thread_runner_stop(srv->runner);
+    }
 }
 
 void kdb_server_wait_for_stop(kdb_server_t* srv) {
     assert(srv);
-    thread_runner_join(srv->runner);
+    if (srv->runner) {
+        thread_runner_join(srv->runner);
+    }
     if (srv->plugin.stop_cb) {
         srv->plugin.stop_cb(srv);
     }
@@ -275,7 +329,7 @@ int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
     srv->plugin.stop_cb   = (kdb_server_on_after_stop_t)GetProcAddress(srv->plugin_handle, "on_stop");
     srv->plugin.update_cb = (kdb_server_on_key_after_update_t)GetProcAddress(srv->plugin_handle, "on_update");
 #	else
-	srv->plugin_handle = ::dlopen(file, RTLD_NOW);
+	srv->plugin_handle = dlopen(file, RTLD_NOW);
     if (!srv->plugin_handle) {
         return db_error_load_plugin;
     }

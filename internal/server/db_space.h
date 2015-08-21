@@ -423,7 +423,6 @@ int isnumber(void* s, int size);
  */
 char* kdb_lltoa(long long ll, char* buffer, int* size);
 
-#ifdef WIN32
 /**
  * ×Ö·û´®×ªlong long
  * @param s ×Ö·û´®
@@ -431,7 +430,6 @@ char* kdb_lltoa(long long ll, char* buffer, int* size);
  * @return long long
  */
 long long atoll_s(void* s, int size);
-#endif /* WIN32 */
 
 /*! ×Ö·û´®±éÀúºê */
 #define for_each_char(c, s) \
