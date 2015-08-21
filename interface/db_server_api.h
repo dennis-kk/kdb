@@ -44,7 +44,6 @@ extern kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv);
  * 向空间内增加属性, 路径上不存在的空间也会自动建立
  * @param space kdb_space_t实例
  * @param path 路径
- * @param full_path 全路径
  * @param value 属性值
  * @param size 属性值长度
  * @param flags memcached flags
@@ -52,7 +51,7 @@ extern kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv);
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-extern int kdb_space_set_key(kdb_space_t* space, const char* path, const char* full_path,
+extern int kdb_space_set_key(kdb_space_t* space, const char* path,
     const void* value, int size, uint32_t flags, uint32_t exptime);
 
 /**
@@ -145,12 +144,11 @@ extern int kdb_space_decr_key(kdb_space_t* space, const char* path, uint64_t del
  * 添加子空间
  * @param space kdb_space_t实例
  * @param path 路径
- * @param full_path 全路径
  * @param exptime memcached exptime
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-extern int kdb_space_add_space(kdb_space_t* space, const char* path, const char* full_path, uint32_t exptime);
+extern int kdb_space_add_space(kdb_space_t* space, const char* path, uint32_t exptime);
 
 /**
  * 获取子空间

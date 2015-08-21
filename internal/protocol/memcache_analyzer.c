@@ -404,13 +404,13 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
     int i     = 0;
     switch (mc->command_type) {
         case command_type_set: /* set */
-            error = kdb_space_set_key(root_space, mc->key, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
+            error = kdb_space_set_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_add: /* add */
             error = kdb_space_add_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_addspace: /* addspace */
-            error = kdb_space_add_space(root_space, mc->key, mc->key, mc->exptime);
+            error = kdb_space_add_space(root_space, mc->key, mc->exptime);
             break;
         case command_type_replace: /* replace */
             error = kdb_space_update_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, 0);
@@ -568,18 +568,48 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
     }
 }
 
-int publish_update(kchannel_ref_t* channel, const char* path, kdb_space_value_t* sv) {
-    kstream_t*  stream = knet_channel_ref_get_stream(channel);
+int publish_update(kchannel_ref_t* channel, kdb_space_value_t* sv) {
+    kstream_t*   stream = knet_channel_ref_get_stream(channel);
     kdb_value_t* dv     = kdb_space_value_get_value(sv);
-    knet_stream_push_varg(stream, "PUB UPDATED %s %d\r\n", path, kdb_value_get_size(dv));
+    kdb_space_t* owner  = kdb_space_value_get_owner(sv);
+    knet_stream_push_varg(stream, "PUB UPDATED %s.%s %d\r\n", kdb_space_get_path(owner),
+        kdb_space_value_get_name(sv), kdb_value_get_size(dv));
     knet_stream_push(stream, kdb_value_get_value(dv), kdb_value_get_size(dv));
     knet_stream_push_varg(stream, "\r\nEND\r\n");
     return db_error_ok;
 }
 
-int publish_delete(kchannel_ref_t* channel, const char* path) {
-    kstream_t* stream = knet_channel_ref_get_stream(channel);
-    knet_stream_push_varg(stream, "PUB DELETED %s\r\n", path);
+int publish_delete(kchannel_ref_t* channel, kdb_space_value_t* sv) {
+    kstream_t*   stream = knet_channel_ref_get_stream(channel);
+    kdb_value_t* dv     = 0;
+    kdb_space_t* owner  = kdb_space_value_get_owner(sv);
+    if (kdb_space_value_check_type(sv, space_value_type_space)) {
+        knet_stream_push_varg(stream, "PUB DELETED SPACE %s\r\n",
+            kdb_space_get_path(kdb_space_value_get_space(sv)));
+    } else if (kdb_space_value_check_type(sv, space_value_type_value)) {
+        dv = kdb_space_value_get_value(sv);
+        knet_stream_push_varg(stream, "PUB DELETED OBJECT %s.%s %d\r\n", kdb_space_get_path(owner),
+            kdb_space_value_get_name(sv), kdb_value_get_size(dv));
+        knet_stream_push(stream, kdb_value_get_value(dv), kdb_value_get_size(dv));
+        knet_stream_push_varg(stream, "\r\nEND\r\n");
+    }    
+    return db_error_ok;
+}
+
+int publish_add(kchannel_ref_t* channel, kdb_space_value_t* sv) {
+    kstream_t*   stream = knet_channel_ref_get_stream(channel);
+    kdb_value_t* dv     = 0;
+    kdb_space_t* owner  = kdb_space_value_get_owner(sv);
+    if (kdb_space_value_check_type(sv, space_value_type_space)) {
+        knet_stream_push_varg(stream, "PUB ADDED SPACE %s\r\n",
+            kdb_space_get_path(kdb_space_value_get_space(sv)));
+    } else if (kdb_space_value_check_type(sv, space_value_type_value)) {
+        dv = kdb_space_value_get_value(sv);
+        knet_stream_push_varg(stream, "PUB ADDED OBJECT %s.%s %d\r\n", kdb_space_get_path(owner),
+            kdb_space_value_get_name(sv), kdb_value_get_size(dv));
+        knet_stream_push(stream, kdb_value_get_value(dv), kdb_value_get_size(dv));
+        knet_stream_push_varg(stream, "\r\nEND\r\n");
+    }    
     return db_error_ok;
 }
 

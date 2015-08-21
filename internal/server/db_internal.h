@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 
 #if !defined(WIN32)
 #include <sched.h>
@@ -49,7 +50,7 @@ typedef struct _spinlock_t {
 #define MAX_NAME_SIZE              32                 /* 子路径的最大名字长度 */
 #define MAX_PATH_SIZE              MAX_NAME_SIZE * 4  /* 最大路径长度 */
 #define ROOT_SPACE_DEFAULT_BUCKETS 10001              /* 根空间的哈希表默认桶数量 */
-#define SPACE_DEFAULT_BUCKETS      129                /* 非空间的哈希表默认桶数量 */
+#define SPACE_DEFAULT_BUCKETS      129                /* 非根空间的哈希表默认桶数量 */
 #define SERVER_DEFAULT_IP          "192.168.2.40"     /* 默认IP */
 #define SERVER_DEFAULT_PORT        26888              /* 默认监听端口 */
 #define TIMER_DEFAULT_FREQ         1000               /* 定时器默认刷新频率(毫秒) */
@@ -67,6 +68,7 @@ typedef struct _spinlock_t {
 #define CHANGE_VALUE_LENGTH        64                 /* memcached incr, decr值字段最大长度 */
 #define MEMCACHED_CRLF             "\r\n"             /* memcached协议分割 */
 #define MEMCACHED_NOREPLY          "noreply"          /* memcached noreply */
+#define ROOT_SPACE                 "root"             /* 根空间名称 */
 
 extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */

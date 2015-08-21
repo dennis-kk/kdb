@@ -175,21 +175,29 @@ void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, 
 /**
  * 发布更新事件
  * @param channel kchannel_ref_t实例
- * @param path 路径
  * @param dv kdb_space_value_t实例
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int publish_update(kchannel_ref_t* channel, const char* path, kdb_space_value_t* dv);
+int publish_update(kchannel_ref_t* channel, kdb_space_value_t* sv);
 
 /**
  * 发布销毁事件
  * @param channel kchannel_ref_t实例
- * @param path 路径
+ * @param dv kdb_space_value_t实例
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int publish_delete(kchannel_ref_t* channel, const char* path);
+int publish_delete(kchannel_ref_t* channel, kdb_space_value_t* sv);
+
+/**
+ * 发布添加事件
+ * @param channel kchannel_ref_t实例
+ * @param dv kdb_space_value_t实例
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int publish_add(kchannel_ref_t* channel, kdb_space_value_t* sv);
 
 #define EQUAL(a, b) \
     !strcmp(a, b)

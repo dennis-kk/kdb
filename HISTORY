@@ -1,2 +1,7 @@
 0.1.0
 1. first commit
+
+0.1.1
+1. remove full_path parameter
+2. add new PUB event: ADDED for space/attribute
+3. update README.md for kdb PUB/SUB protocol detail
