@@ -47,6 +47,7 @@ typedef enum _command_type_e {
     command_type_sub,
     command_type_leavekey,
     command_type_leave,
+    command_type_quit,
 } command_type_e;
 
 /**
@@ -386,6 +387,14 @@ int memcache_analyzer_analyze_command_line(memcache_analyzer_t* mc, const char* 
             }
             break;
         }
+        case 'q': {
+            if (EQUAL(mc->command, "quit")) {
+                mc->command_type = command_type_quit;
+            } else {
+                return db_error_unknown_command;
+            }
+            break;
+        }
         default: {
             return db_error_unknown_command;
         }
@@ -403,6 +412,9 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
     int error = db_error_ok;
     int i     = 0;
     switch (mc->command_type) {
+        case command_type_quit: /* quit */
+            knet_channel_ref_close(channel);
+            break;
         case command_type_set: /* set */
             error = kdb_space_set_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;

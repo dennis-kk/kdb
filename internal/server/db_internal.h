@@ -52,7 +52,7 @@ typedef struct _spinlock_t {
 #define MAX_PATH_SIZE              MAX_NAME_SIZE * 4  /* 最大路径长度 */
 #define ROOT_SPACE_DEFAULT_BUCKETS 10001              /* 根空间的哈希表默认桶数量 */
 #define SPACE_DEFAULT_BUCKETS      129                /* 非根空间的哈希表默认桶数量 */
-#define SERVER_DEFAULT_IP          "192.168.2.40"     /* 默认IP */
+#define SERVER_DEFAULT_IP          "0.0.0.0"          /* 默认IP */
 #define SERVER_DEFAULT_PORT        26888              /* 默认监听端口 */
 #define TIMER_DEFAULT_FREQ         1000               /* 定时器默认刷新频率(毫秒) */
 #define TIMER_DEFAULT_SLOT         1000               /* 定时器默认时间轮槽位数量 */
@@ -76,5 +76,7 @@ extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */
 extern kloop_t*       server_loop; /* 网络循环 */
 extern ktimer_loop_t* timer_loop;  /* 定时器循环 */
+
+#define KDB_VERSION "0.1.1"
 
 #endif /* DB_INTERNAL_H */

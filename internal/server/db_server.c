@@ -26,10 +26,10 @@
 #include "db_space.h"
 #include "memcache_analyzer.h"
 
-kdb_server_t*   db_server   = 0;
-kloop_t*        server_loop = 0;
-ktimer_loop_t*  timer_loop  = 0;
-kdb_space_t*    root_space  = 0;
+kdb_server_t*  db_server   = 0;
+kloop_t*       server_loop = 0;
+ktimer_loop_t* timer_loop  = 0;
+kdb_space_t*   root_space  = 0;
 
 struct _server_plugin_t {
     kdb_server_on_after_start_t       start_cb;
@@ -91,62 +91,10 @@ void kdb_server_destroy(kdb_server_t* srv) {
     destroy(srv);
 }
 
-void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv) {
-    int i = 1;
-    /* 默认值 */
-    srv->root_space_buckets = ROOT_SPACE_DEFAULT_BUCKETS;
-    srv->space_buckets      = SPACE_DEFAULT_BUCKETS;
-    srv->port               = SERVER_DEFAULT_PORT;
-    srv->channel_timeout    = CHANNEL_DEFAULT_TIMEOUT;
-    srv->timer_freq         = TIMER_DEFAULT_FREQ;
-    srv->timer_slot         = TIMER_DEFAULT_SLOT;
-    strcpy(srv->ip, SERVER_DEFAULT_IP);
-    /* 命令行参数 */
-    if (argc < 2) {
-        return;
-    }
-    for (; i < argc;) {
-        if (EQUAL(argv[i], "-ip")) {
-            if (i + 1 < argc) {
-                strcpy(srv->ip, argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-port")) {
-            if (i + 1 < argc) {
-                srv->port = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-channel-timeout")) {
-            if (i + 1 < argc) {
-                srv->channel_timeout = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-root-buckets")) {
-            if (i + 1 < argc) {
-                srv->root_space_buckets = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-space-buckets")) {
-            if (i + 1 < argc) {
-                srv->space_buckets = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-timer-freq")) {
-            if (i + 1 < argc) {
-                srv->timer_freq = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-timer-slot")) {
-            if (i + 1 < argc) {
-                srv->timer_slot = atoi(argv[++i]);
-            }
-        } else if (EQUAL(argv[i], "-plugin")) {
-            if (i + 1 < argc) {
-                strcpy(srv->plugin_path, argv[++i]);
-            }
-        } else {
-            i += 1;
-        }
-    }
-}
-
 int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     kchannel_ref_t* acceptor = 0;
     assert(srv);
+    kdb_server_welcome();
     /* 命令行参数 */
     kdb_server_parse_command_line(srv, argc, argv);
     /* 建立根空间 */
@@ -159,8 +107,9 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     acceptor = knet_loop_create_channel(server_loop, 128, ACTION_BUFFER_LENGTH);
     assert(acceptor);
     knet_channel_ref_set_cb(acceptor, acceptor_cb);
-    printf("Starting @ %s:%d...\n", srv->ip, srv->port);
+    printf("Starting @ %s:%d ", srv->ip, srv->port);
     if (error_ok != knet_channel_ref_accept(acceptor, srv->ip, srv->port, 1024)) {
+        printf("[Fail]\n");
         return db_error_listen_fail;
     }
     /* 建立定时器循环 */
@@ -171,6 +120,7 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     assert(srv->runner);
     /* 启动工作线程 */
     if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", server_loop, timer_loop)) {
+        printf("[Fail]\n");
         return db_error_server_start_thread_fail;
     }
     if (srv->plugin_path[0]) {
@@ -185,6 +135,7 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     if (srv->plugin.start_cb) {
         srv->plugin.start_cb(srv);
     }
+    printf("[Ok]\n");
     return db_error_ok;
 }
 
@@ -340,4 +291,78 @@ int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
     srv->plugin.update_cb = (kdb_server_on_key_after_update_t)dlsym(srv->plugin_handle, "on_update");
 #	endif // WIN32
     return db_error_ok;
+}
+
+void kdb_server_print_help() {
+    printf(
+        "-ip              IP address\n"
+        "-port            Listening port\n"
+        "-channel-timeout Client connection timeout(s)\n"
+        "-root-buckets    Buckets of root space hash table\n"
+        "-space-buckets   Buckets of child space hash table\n"
+        "-timer-freq      Timer refresh interval(ms)\n"
+        "-timer-slot      Slots of timer ring\n"
+        "-plugin          Path of plugin\n"
+        "-h               Help\n"
+        );
+}
+
+void kdb_server_welcome() {
+    printf("kdb v%s, -h for options.\n", KDB_VERSION);
+}
+
+void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv) {
+    int i = 1;
+    /* 默认值 */
+    srv->root_space_buckets = ROOT_SPACE_DEFAULT_BUCKETS;
+    srv->space_buckets      = SPACE_DEFAULT_BUCKETS;
+    srv->port               = SERVER_DEFAULT_PORT;
+    srv->channel_timeout    = CHANNEL_DEFAULT_TIMEOUT;
+    srv->timer_freq         = TIMER_DEFAULT_FREQ;
+    srv->timer_slot         = TIMER_DEFAULT_SLOT;
+    strcpy(srv->ip, SERVER_DEFAULT_IP);
+    /* 命令行参数 */
+    if (argc < 2) {
+        return;
+    }
+    for (; i < argc;) {
+        if (EQUAL(argv[i], "-ip")) {
+            if (i + 1 < argc) {
+                strcpy(srv->ip, argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-port")) {
+            if (i + 1 < argc) {
+                srv->port = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-channel-timeout")) {
+            if (i + 1 < argc) {
+                srv->channel_timeout = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-root-buckets")) {
+            if (i + 1 < argc) {
+                srv->root_space_buckets = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-space-buckets")) {
+            if (i + 1 < argc) {
+                srv->space_buckets = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-timer-freq")) {
+            if (i + 1 < argc) {
+                srv->timer_freq = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-timer-slot")) {
+            if (i + 1 < argc) {
+                srv->timer_slot = atoi(argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-plugin")) {
+            if (i + 1 < argc) {
+                strcpy(srv->plugin_path, argv[++i]);
+            }
+        } else if (EQUAL(argv[i], "-h")) {
+            kdb_server_print_help();
+            exit(0);
+        } else {
+            i += 1;
+        }
+    }
 }

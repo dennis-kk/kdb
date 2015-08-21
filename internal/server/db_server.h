@@ -137,4 +137,28 @@ void acceptor_cb(kchannel_ref_t* channel, knet_channel_cb_event_e e);
  */
 void connector_cb(kchannel_ref_t* channel, knet_channel_cb_event_e e);
 
+/**
+ * 输出帮助信息
+ */
+void kdb_server_print_help();
+
+/**
+ * 欢迎信息
+ */
+void kdb_server_welcome();
+
+/**
+ * 获取命令行参数
+ * @param srv kdb_server_t实例
+ * @param argc 参数个数
+ * @param argv 参数指针数组
+ */
+void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv);
+
+/**
+ * 获取可执行文件目录
+ * @return 可执行文件目录
+ */
+const char* get_exe_path();
+
 #endif /* DB_SERVER_H */
