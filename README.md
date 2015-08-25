@@ -27,6 +27,12 @@ User can write the plugin to hook the event in `kdb` process, the plugin is a co
 	typedef int (*kdb_server_on_key_after_update_t)(kdb_server_t*, kdb_space_value_t*);
 	/*! called before delete object */
 	typedef int (*kdb_server_on_key_before_delete_t)(kdb_server_t*, kdb_space_value_t*);
+	/*! malloc */
+	typedef void* (*kdb_server_malloc_t)(int);
+	/*! realloc */
+	typedef void* (*kdb_server_realloc_t)(void*, int);
+	/*! free */
+	typedef void (*kdb_server_free_t)(void*);
 
 The expose API symbol name:
 
@@ -35,7 +41,9 @@ The expose API symbol name:
 	 on_add
 	 on_update
 	 on_delete
-
+     on_malloc
+     on_realloc
+     on_free
 
 # exptime
 The `exptime` of memcached for now is not implemented, please set `exptime` to zero.
