@@ -161,4 +161,25 @@ void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv);
  */
 const char* get_exe_path();
 
+/**
+ * 获取malloc函数指针
+ * @param srv kdb_server_t实例
+ * @return malloc函数指针
+ */
+kdb_server_malloc_t kdb_server_get_malloc(kdb_server_t* srv);
+
+/**
+ * 获取realloc函数指针
+ * @param srv kdb_server_t实例
+ * @return realloc函数指针
+ */
+kdb_server_realloc_t kdb_server_get_realloc(kdb_server_t* srv);
+
+/**
+ * 获取free函数指针
+ * @param srv kdb_server_t实例
+ * @return free函数指针
+ */
+kdb_server_free_t kdb_server_get_free(kdb_server_t* srv);
+
 #endif /* DB_SERVER_H */

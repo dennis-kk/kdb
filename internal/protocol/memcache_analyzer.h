@@ -225,7 +225,7 @@ int publish_add(kchannel_ref_t* channel, kdb_space_value_t* sv);
         pos += bytes; \
     } while(0);
 
-#define GET(buffer, key, size, pos, bytes, error) \
+#define GET_HOLD(buffer, key, size, pos, bytes, error) \
     do { \
         bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
         if (!bytes) { \

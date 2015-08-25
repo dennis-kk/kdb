@@ -5,3 +5,7 @@
 1. remove full_path parameter
 2. add new PUB event: ADDED for space/attribute
 3. update README.md for kdb PUB/SUB protocol detail
+
+0.1.2
+1. plugin API: on_malloc, on_realloc, on_free
+2. refractory the code of memcache protocol parser

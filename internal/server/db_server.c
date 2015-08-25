@@ -26,35 +26,44 @@
 #include "db_space.h"
 #include "memcache_analyzer.h"
 
-kdb_server_t*  db_server   = 0;
-kloop_t*       server_loop = 0;
-ktimer_loop_t* timer_loop  = 0;
-kdb_space_t*   root_space  = 0;
+kdb_server_t*  db_server   = 0; /* 服务器 */
+kloop_t*       server_loop = 0; /* 网络循环 */
+ktimer_loop_t* timer_loop  = 0; /* 定时器循环 */
+kdb_space_t*   root_space  = 0; /* 根空间 */
 
+/**
+ * 插件
+ */
 struct _server_plugin_t {
     kdb_server_on_after_start_t       start_cb;
     kdb_server_on_after_stop_t        stop_cb;
     kdb_server_on_key_after_add_t     add_cb;
     kdb_server_on_key_after_update_t  update_cb;
     kdb_server_on_key_before_delete_t delete_cb;
+    kdb_server_malloc_t               malloc_cb;
+    kdb_server_realloc_t              realloc_cb;
+    kdb_server_free_t                 free_cb;
 };
 
+/**
+ * 服务器
+ */
 struct _db_server_t {
-    kthread_runner_t*   runner;
-    kdb_server_plugin_t plugin;
-    char                plugin_path[PLUGIN_MAX_PATH];
-    char                ip[32];
-    int                 port;
-    int                 root_space_buckets;
-    int                 space_buckets;
-    int                 channel_timeout;
-    char*               action_buffer;
-    int                 timer_freq;
-    int                 timer_slot;
+    kthread_runner_t*   runner;                       /* 工作线程 */
+    kdb_server_plugin_t plugin;                       /* 插件 */
+    char                plugin_path[PLUGIN_MAX_PATH]; /* 插件文件路径 */
+    char                ip[32];                       /* IP */
+    int                 port;                         /* 端口 */
+    int                 root_space_buckets;           /* 根空间桶数量 */
+    int                 space_buckets;                /* 子空间桶数量 */
+    int                 channel_timeout;              /* 管道超时 */
+    char*               action_buffer;                /* 命令缓冲区 */
+    int                 timer_freq;                   /* 定时器刷新频率 */
+    int                 timer_slot;                   /* 定时器时间轮槽位数量 */
 #   ifdef WIN32
-    HMODULE             plugin_handle;
+    HMODULE             plugin_handle;                /* 插件句柄 */
 #   else
-    void*               plugin_handle;
+    void*               plugin_handle;                /* 插件句柄 */
 #   endif /* WIN32 */
 };
 
@@ -97,6 +106,16 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     kdb_server_welcome();
     /* 命令行参数 */
     kdb_server_parse_command_line(srv, argc, argv);
+    /* 加载插件 */
+    if (srv->plugin_path[0]) {
+        kdb_server_load_plugin(srv, srv->plugin_path);
+    } else {
+#       ifdef WIN32
+        kdb_server_load_plugin(srv, "db_plugin.dll");
+#       else
+        kdb_server_load_plugin(srv, "db_plugin.so");
+#       endif /* WIN32 */
+    }
     /* 建立根空间 */
     root_space = kdb_space_create(0, srv, srv->root_space_buckets);
     assert(root_space);
@@ -122,15 +141,6 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", server_loop, timer_loop)) {
         printf("[Fail]\n");
         return db_error_server_start_thread_fail;
-    }
-    if (srv->plugin_path[0]) {
-        kdb_server_load_plugin(srv, srv->plugin_path);
-    } else {
-#       ifdef WIN32
-        kdb_server_load_plugin(srv, "db_plugin.dll");
-#       else
-        kdb_server_load_plugin(srv, "db_plugin.so");
-#       endif /* WIN32 */
     }
     if (srv->plugin.start_cb) {
         srv->plugin.start_cb(srv);
@@ -274,21 +284,27 @@ int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
     if (!srv->plugin_handle) {
         return db_error_load_plugin;
     }
-    srv->plugin.add_cb    = (kdb_server_on_key_after_add_t)GetProcAddress(srv->plugin_handle, "on_add");
-    srv->plugin.delete_cb = (kdb_server_on_key_before_delete_t)GetProcAddress(srv->plugin_handle, "on_delete");
-    srv->plugin.start_cb  = (kdb_server_on_after_start_t)GetProcAddress(srv->plugin_handle, "on_start");
-    srv->plugin.stop_cb   = (kdb_server_on_after_stop_t)GetProcAddress(srv->plugin_handle, "on_stop");
-    srv->plugin.update_cb = (kdb_server_on_key_after_update_t)GetProcAddress(srv->plugin_handle, "on_update");
+    srv->plugin.add_cb     = (kdb_server_on_key_after_add_t)GetProcAddress(srv->plugin_handle, "on_add");
+    srv->plugin.delete_cb  = (kdb_server_on_key_before_delete_t)GetProcAddress(srv->plugin_handle, "on_delete");
+    srv->plugin.start_cb   = (kdb_server_on_after_start_t)GetProcAddress(srv->plugin_handle, "on_start");
+    srv->plugin.stop_cb    = (kdb_server_on_after_stop_t)GetProcAddress(srv->plugin_handle, "on_stop");
+    srv->plugin.update_cb  = (kdb_server_on_key_after_update_t)GetProcAddress(srv->plugin_handle, "on_update");
+    srv->plugin.malloc_cb  = (kdb_server_malloc_t)GetProcAddress(srv->plugin_handle, "on_malloc");
+    srv->plugin.realloc_cb = (kdb_server_realloc_t)GetProcAddress(srv->plugin_handle, "on_realloc");
+    srv->plugin.free_cb    = (kdb_server_free_t)GetProcAddress(srv->plugin_handle, "on_free");
 #	else
 	srv->plugin_handle = dlopen(file, RTLD_NOW);
     if (!srv->plugin_handle) {
         return db_error_load_plugin;
     }
-    srv->plugin.add_cb    = (kdb_server_on_key_after_add_t)dlsym(srv->plugin_handle, "on_add");
-    srv->plugin.delete_cb = (kdb_server_on_key_before_delete_t)dlsym(srv->plugin_handle, "on_delete");
-    srv->plugin.start_cb  = (kdb_server_on_after_start_t)dlsym(srv->plugin_handle, "on_start");
-    srv->plugin.stop_cb   = (kdb_server_on_after_stop_t)dlsym(srv->plugin_handle, "on_stop");
-    srv->plugin.update_cb = (kdb_server_on_key_after_update_t)dlsym(srv->plugin_handle, "on_update");
+    srv->plugin.add_cb     = (kdb_server_on_key_after_add_t)dlsym(srv->plugin_handle, "on_add");
+    srv->plugin.delete_cb  = (kdb_server_on_key_before_delete_t)dlsym(srv->plugin_handle, "on_delete");
+    srv->plugin.start_cb   = (kdb_server_on_after_start_t)dlsym(srv->plugin_handle, "on_start");
+    srv->plugin.stop_cb    = (kdb_server_on_after_stop_t)dlsym(srv->plugin_handle, "on_stop");
+    srv->plugin.update_cb  = (kdb_server_on_key_after_update_t)dlsym(srv->plugin_handle, "on_update");
+    srv->plugin.malloc_cb  = (kdb_server_malloc_t)dlsym(srv->plugin_handle, "on_malloc");
+    srv->plugin.realloc_cb = (kdb_server_realloc_t)dlsym(srv->plugin_handle, "on_realloc");
+    srv->plugin.free_cb    = (kdb_server_free_t)dlsym(srv->plugin_handle, "on_free");
 #	endif // WIN32
     return db_error_ok;
 }
@@ -365,4 +381,19 @@ void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv) {
             i += 1;
         }
     }
+}
+
+kdb_server_malloc_t kdb_server_get_malloc(kdb_server_t* srv) {
+    assert(srv);
+    return srv->plugin.malloc_cb;
+}
+
+kdb_server_realloc_t kdb_server_get_realloc(kdb_server_t* srv) {
+    assert(srv);
+    return srv->plugin.realloc_cb;
+}
+
+kdb_server_free_t kdb_server_get_free(kdb_server_t* srv) {
+    assert(srv);
+    return srv->plugin.free_cb;
 }

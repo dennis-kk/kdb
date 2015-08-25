@@ -27,6 +27,36 @@
 #include "memcache_analyzer.h"
 #include "db_spinlock.h"
 
+static void* kdb_malloc(int size) {
+    if (db_server) {
+        if (kdb_server_get_malloc(db_server)) {
+            return kdb_server_get_malloc(db_server)(size);
+        }
+    }
+    return create_raw(size);
+}
+
+static void* kdb_realloc(void* p, int size) {
+    if (db_server) {
+        if (kdb_server_get_realloc(db_server)) {
+            return kdb_server_get_realloc(db_server)(p, size);
+        }
+    }
+    return rcreate_raw(p, size);
+}
+
+static void kdb_free(void* p) {
+    if (db_server) {
+        if (kdb_server_get_free(db_server)) {
+            kdb_server_get_free(db_server)(p);
+        }
+    }
+    destroy(p);
+}
+
+#define KDB_CREATE(type) \
+    (type*)kdb_malloc(sizeof(type))
+
 /**
  * 值变化发布类型
  */
@@ -93,9 +123,9 @@ struct _db_space_t {
 };
 
 kdb_value_t* kdb_value_create(const void* value, int size) {
-    kdb_value_t* v = create(kdb_value_t);
+    kdb_value_t* v = KDB_CREATE(kdb_value_t);
     memset(v, 0, sizeof(kdb_value_t));
-    v->v = create_raw(size);
+    v->v = kdb_malloc(size);
     memcpy(v->v, value, size);
     v->size     = size;
     v->max_size = size;
@@ -224,14 +254,14 @@ void kdb_check_top_level_sub(kdb_space_value_t* v) {
 }
 
 kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    kdb_space_value_t* v = create(kdb_space_value_t);
+    kdb_space_value_t* v = KDB_CREATE(kdb_space_value_t);
     assert(v);
     memset(v, 0, sizeof(kdb_space_value_t));
     v->type  = space_value_type_value;
     v->owner = owner;
     v->id    = uuid_create(); /* UUID */
     kdb_spinlock_init(&v->lock, db_space_op_type_none);
-    v->name  = create_raw(strlen(name) + 1);
+    v->name  = kdb_malloc(strlen(name) + 1);
     assert(v->name);
     strcpy(v->name, name); /* 值名称 */
     v->value = kdb_value_create(value, size);
@@ -246,7 +276,7 @@ kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* 
     kdb_space_value_t* v   = 0;
     kdb_server_t*      srv = 0;
     assert(owner);
-    v = create(kdb_space_value_t);
+    v = KDB_CREATE(kdb_space_value_t);
     assert(v);
     srv = kdb_space_get_server(owner);
     memset(v, 0, sizeof(kdb_space_value_t));
@@ -254,13 +284,13 @@ kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* 
     v->owner = owner;
     v->id    = uuid_create(); /* UUID */
     kdb_spinlock_init(&v->lock, db_space_op_type_none);
-    v->name  = create_raw(strlen(name) + 1); /* 空间名称 */
+    v->name  = kdb_malloc(strlen(name) + 1); /* 空间名称 */
     assert(v->name);
     strcpy(v->name, name);
     v->space = kdb_space_create(owner, srv, kdb_server_get_space_buckets(db_server));
     assert(v->space);
     v->space->sv = v; /* 设置所属空间值 */
-    v->space->path = create_raw(strlen(full_path) + 1); /* 全路径 */
+    v->space->path = kdb_malloc(strlen(full_path) + 1); /* 全路径 */
     assert(v->space->path);
     strcpy(v->space->path, full_path);
     v->exptime = exptime;
@@ -609,7 +639,7 @@ int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, cons
         } else {
             /* 扩大 */
             v->value->max_size = size;
-            v->value->v = rcreate_raw(v->value->v, size);
+            v->value->v = kdb_realloc(v->value->v, size);
             assert(v->value->v);
             memcpy(v->value->v, value, size);
         }
@@ -662,7 +692,7 @@ int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, c
             /* 扩大 */
             v->value->max_size = new_size;
             v->value->size     = new_size;
-            v->value->v = rcreate_raw(v->value->v, new_size);
+            v->value->v = kdb_realloc(v->value->v, new_size);
             assert(v->value->v);
             memcpy(v->value->v, buffer, new_size);
         } else {
@@ -890,7 +920,7 @@ int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, co
 }
 
 kdb_space_t* kdb_space_create(kdb_space_t* parent, kdb_server_t* srv, int buckets) {
-    kdb_space_t* space = create(kdb_space_t);
+    kdb_space_t* space = KDB_CREATE(kdb_space_t);
     memset(space, 0, sizeof(kdb_space_t));
     assert(space);
     space->parent  = parent;

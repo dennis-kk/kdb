@@ -38,6 +38,8 @@
 #include "knet.h"
 #include "db_server_config.h"
 
+#define KDB_VERSION "0.1.2"
+
 typedef enum _db_sub_type_e         kdb_sub_type_e;
 typedef struct _server_plugin_t     kdb_server_plugin_t;
 typedef struct _memcache_analyzer_t memcache_analyzer_t;
@@ -71,12 +73,52 @@ typedef struct _spinlock_t {
 #define MEMCACHED_NOREPLY          "noreply"          /* memcached noreply */
 #define ROOT_SPACE                 "root"             /* 根空间名称 */
 #define PLUGIN_MAX_PATH            250                /* 插件路径最大长度 */
+#define WHITE_SPACE                ' '                /* 空格 */
+#define CR                         '\r'               /* 回车 */
+#define SET                        "set"
+#define SUBKEY                     "subkey"
+#define SUB                        "sub"
+#define ADD                        "add"
+#define ADDSPACE                   "addspace"
+#define APPEND                     "append"
+#define LEAVEKEY                   "leavekey"
+#define LEAVE                      "leave"
+#define REPLACE                    "replace"
+#define PREPEND                    "prepend"
+#define CAS                        "cas"
+#define GET                        "get"
+#define GETS                       "gets"
+#ifdef DELETE
+#undef DELETE
+#define DELETE                     "delete"
+#endif /* DELETE */
+#define DELETESPACE                "deletespace"
+#define DECR                       "decr"
+#define INCR                       "incr"
+#define QUIT                       "quit"
+#define CLIENT_ERROR_FORMAT        "CLIENT_ERROR (%s:%s)\r\n"
+#define INVALID_COMMAND_FORMAT     "invalid command format"
+#ifdef ERROR
+#undef ERROR
+#define ERROR                      "ERROR\r\n"
+#endif /* ERROR */
+#define SERVER_ERROR_FORMAT1       "SERVER_ERROR (%s:%s)\r\n"
+#define SERVER_ERROR_FORMAT2       "SERVER_ERROR (%s)\r\n"
+#define COMMOND_NOT_IMPLEMENTED    "command not implemented"
+#define NOT_FOUND                  "NOT_FOUND\r\n"
+#define STORED                     "STORED\r\n"
+#define END                        "END\r\n"
+#define DELETED                    "DELETED\r\n"
+#define NOT_STORED                 "NOT_STORED\r\n"
+#define EXIST                      "EXIST\r\n"
+#define VALUE_FORMAT               "VALUE %s %lld %d\r\n"
+#define CRLF_END_CRLF              "\r\nEND\r\n"
+#define UNUSED(v) \
+    (void)(v)
 
 extern kdb_server_t*  db_server;   /* 服务器单件 */
 extern kdb_space_t*   root_space;  /* 根空间 */
 extern kloop_t*       server_loop; /* 网络循环 */
 extern ktimer_loop_t* timer_loop;  /* 定时器循环 */
-
-#define KDB_VERSION "0.1.1"
 
 #endif /* DB_INTERNAL_H */

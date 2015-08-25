@@ -89,5 +89,11 @@ typedef int (*kdb_server_on_key_after_add_t)(kdb_server_t*, kdb_space_value_t*);
 typedef int (*kdb_server_on_key_after_update_t)(kdb_server_t*, kdb_space_value_t*);
 /*! 回调函数原型 - 属性被销毁前 */
 typedef int (*kdb_server_on_key_before_delete_t)(kdb_server_t*, kdb_space_value_t*);
+/*! 回调函数原型 - malloc */
+typedef void* (*kdb_server_malloc_t)(int);
+/*! 回调函数原型 - realloc */
+typedef void* (*kdb_server_realloc_t)(void*, int);
+/*! 回调函数原型 - free */
+typedef void (*kdb_server_free_t)(void*);
 
 #endif /* DB_SERVER_CONFIG_H */
