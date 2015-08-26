@@ -112,7 +112,7 @@ typedef enum _command_type_e {
 #define CLIENT_ERROR_FORMAT        "CLIENT_ERROR (%s:%s)\r\n"
 #define CLIENT_ERROR_FORMAT1       "CLIENT_ERROR (%s)\r\n"
 #define INVALID_COMMAND_FORMAT     "invalid command format"
-#define KDB_ERROR                  "KDB_ERROR\r\n"
+#define KDB_ERROR                  "ERROR\r\n"
 #define SERVER_ERROR_FORMAT1       "SERVER_ERROR (%s:%s)\r\n"
 #define SERVER_ERROR_FORMAT2       "SERVER_ERROR (%s)\r\n"
 #define SERVER_ERROR_FORMAT        "SERVER_ERROR\r\n"

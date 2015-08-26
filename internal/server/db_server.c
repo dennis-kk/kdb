@@ -147,13 +147,23 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     /* 命令行参数 */
     kdb_server_parse_command_line(srv, argc, argv);
     /* 加载插件 */
-    error = kdb_server_load_plugin(srv, srv->plugin_path);
-    if (db_error_ok != error) {
-        return error;
+    if (!srv->plugin_path[0]) {
+#       ifdef WIN32
+        kdb_server_load_plugin(srv, "db_plugin.dll");
+#       else
+        kdb_server_load_plugin(srv, "db_plugin.so");
+#       endif /* WIN32 */
+    } else {
+        error = kdb_server_load_plugin(srv, srv->plugin_path);
+        if (db_error_ok != error) {
+            printf("[Fail]\n");
+            return error;
+        }
     }
     /* 启动工作线程 */
     error = kdb_server_start_worker(srv);
     if (db_error_ok != error) {
+        printf("[Fail]\n");
         return error;
     }
     /* 建立根空间 */
@@ -165,6 +175,7 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     /* 建立监听器 */
     error = kdb_server_start_acceptor(srv);
     if (db_error_ok != error) {
+        printf("[Fail]\n");
         return error;
     }
     /* 建立定时器循环 */
@@ -173,6 +184,7 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
     /* 建立网络线程 */
     error = kdb_server_start_main(srv);
     if (db_error_ok != error) {
+        printf("[Fail]\n");
         return error;
     }
     if (srv->plugin.start_cb) {
@@ -312,14 +324,6 @@ const char* get_exe_path() {
 }
 
 int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
-    if (!srv->plugin_path[0]) {
-#       ifdef WIN32
-        kdb_server_load_plugin(srv, "db_plugin.dll");
-#       else
-        kdb_server_load_plugin(srv, "db_plugin.so");
-#       endif /* WIN32 */
-        return db_error_ok;
-    }
 #	ifdef WIN32
     SetDllDirectoryA(get_exe_path());
     srv->plugin_handle = LoadLibraryA(file);
