@@ -280,7 +280,7 @@ int memcache_analyzer_analyze_command_prefix_c(memcache_analyzer_t* mc, const ch
 
 int memcache_analyzer_analyze_command_prefix_d(memcache_analyzer_t* mc, const char* buffer, int pos) {
     int error = db_error_ok;
-    if (EQUAL(mc->command, DELETE)) {
+    if (EQUAL(mc->command, KDB_DELETE)) {
         mc->command_type = command_type_delete;
         error = memcache_analyzer_do_analyze_delete(mc, buffer, pos);
     } else if (EQUAL(mc->command, DELETESPACE)) {
@@ -475,7 +475,7 @@ int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channe
             kdb_task_space_get_key(task, mc->key);
             break;
         case command_type_gets: /* gets */
-            kdb_task_space_get_multi_key(task, (char**)mc->keys, mc->key_count);
+            kdb_task_space_get_multi_key(task, (const char**)mc->keys, mc->key_count);
             break;
         case command_type_delete: /* delete */
             kdb_task_space_del_key(task, mc->key);
@@ -559,7 +559,7 @@ void memcache_analyzer_return_error(memcache_analyzer_t* mc, int error, kchannel
             knet_stream_push_varg(stream, CLIENT_ERROR_FORMAT1, INVALID_COMMAND_FORMAT);
             break;
         case db_error_unknown_command:
-            knet_stream_push_varg(stream, ERROR);
+            knet_stream_push_varg(stream, KDB_ERROR);
             break;
         case db_error_command_not_impl:
             knet_stream_push_varg(stream, SERVER_ERROR_FORMAT2, COMMOND_NOT_IMPLEMENTED);

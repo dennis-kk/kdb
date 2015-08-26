@@ -104,21 +104,15 @@ typedef enum _command_type_e {
 #define CAS                        "cas"
 #define GET                        "get"
 #define GETS                       "gets"
-#ifdef DELETE
-#undef DELETE
-#define DELETE                     "delete"
-#endif /* DELETE */
+#define KDB_DELETE                 "delete"
 #define DELETESPACE                "deletespace"
 #define DECR                       "decr"
 #define INCR                       "incr"
 #define QUIT                       "quit"
 #define CLIENT_ERROR_FORMAT        "CLIENT_ERROR (%s:%s)\r\n"
-#define CLIENT_ERROR_FORMAT1        "CLIENT_ERROR (%s)\r\n"
+#define CLIENT_ERROR_FORMAT1       "CLIENT_ERROR (%s)\r\n"
 #define INVALID_COMMAND_FORMAT     "invalid command format"
-#ifdef ERROR
-#undef ERROR
-#define ERROR                      "ERROR\r\n"
-#endif /* ERROR */
+#define KDB_ERROR                  "KDB_ERROR\r\n"
 #define SERVER_ERROR_FORMAT1       "SERVER_ERROR (%s:%s)\r\n"
 #define SERVER_ERROR_FORMAT2       "SERVER_ERROR (%s)\r\n"
 #define SERVER_ERROR_FORMAT        "SERVER_ERROR\r\n"
