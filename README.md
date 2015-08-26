@@ -89,6 +89,19 @@ PUB event - new object notification:
 	data\r\n
 	END\r\n
 
+# Build
+
+## Dependency   
+	knet http://github.com/dennis-kk/knet
+
+## Linux   
+	run build.sh
+
+## Windows
+	see /win-proj. Please set environment variable first:
+		$(KNET_INCLUDE) knet include path,
+		$(KNET_LIB)     knet library path.
+
 # Future
 1. Client
 2. User defined hash function
