@@ -22,33 +22,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "memcache_analyzer.h"
 #include "db_server.h"
 #include "db_space.h"
-
-/**
- * 命令类型
- */
-typedef enum _command_type_e {
-    command_type_set = 1,     /* 设置值 */
-    command_type_add,         /* 添加值 */
-    command_type_addspace,    /* 新建空间 */
-    command_type_replace,     /* 替换 */
-    command_type_append,      /* 前添加 - 未实现 */
-    command_type_prepend,     /* 后添加 - 未实现 */
-    command_type_cas,         /* Check&Swap */
-    command_type_get,         /* 获取单值 */ 
-    command_type_gets,        /* 获取多值 */
-    command_type_delete,      /* 销毁值 */
-    command_type_deletespace, /* 销毁空间 */
-    command_type_incr,        /* incr递增 */
-    command_type_decr,        /* incr递减 */
-    command_type_subkey,      /* 订阅值 */
-    command_type_sub,         /* 订阅空间 */
-    command_type_leavekey,    /* 取消订阅 - 值 */
-    command_type_leave,       /* 取消订阅 - 空间 */
-    command_type_quit,        /* 退出 */
-} command_type_e;
+#include "db_task.h"
+#include "db_util.h"
+#include "memcache_analyzer.h"
 
 /**
  * memcache协议实现
@@ -470,186 +448,63 @@ int memcache_analyzer_analyze_command_line(memcache_analyzer_t* mc, const char* 
  * command_type_append
  * command_type_prepend
  */
-
 int memcache_analyzer_do_command(memcache_analyzer_t* mc, kchannel_ref_t* channel) {
-    int error = db_error_ok;
-    int i     = 0;
+    int         error = db_error_ok;
+    kdb_task_t* task  = kdb_task_create(mc->command_type, channel);
     switch (mc->command_type) {
         case command_type_quit: /* quit */
+            kdb_task_destroy(task);
             knet_channel_ref_close(channel);
             break;
         case command_type_set: /* set */
-            error = kdb_space_set_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
+            kdb_task_space_set_key(task, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_add: /* add */
-            error = kdb_space_add_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
+            kdb_task_space_add_key(task, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_addspace: /* addspace */
-            error = kdb_space_add_space(root_space, mc->key, mc->exptime);
+            kdb_task_space_add_space(task, mc->key, mc->exptime);
             break;
         case command_type_replace: /* replace */
-            error = kdb_space_update_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, 0);
+            kdb_task_space_update_key(task, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime);
             break;
         case command_type_cas: /* cas */
-            error = kdb_space_cas_key(root_space, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, mc->cas_unique);
+            kdb_task_space_cas_key(task, mc->key, mc->data, mc->bytes, mc->flags, mc->exptime, mc->cas_unique);
             break;
         case command_type_get: /* get */
-            error = kdb_space_get_key(root_space, mc->key, &mc->return_value);
+            kdb_task_space_get_key(task, mc->key);
             break;
         case command_type_gets: /* gets */
-            for (i = 0; i < mc->key_count; i++) {
-                error = kdb_space_get_key(root_space, mc->keys[i], &mc->return_value_array[i]);
-                if (db_error_ok != error) {
-                    mc->return_value_array[i] = 0;
-                }
-            }
-            error = db_error_ok;
+            kdb_task_space_get_multi_key(task, (char**)mc->keys, mc->key_count);
             break;
         case command_type_delete: /* delete */
-            error = kdb_space_del_key(root_space, mc->key);
+            kdb_task_space_del_key(task, mc->key);
             break;
         case command_type_deletespace: /* deletespace */
-            error = kdb_space_del_space(root_space, mc->key);
+            kdb_task_space_del_space(task, mc->key);
             break;
         case command_type_subkey: /* subkey */
-            error = kdb_space_subscribe_key(root_space, mc->key, channel);
+            kdb_task_space_subscribe_key(task, mc->key);
             break;
         case command_type_sub: /* sub */
-            error = kdb_space_subscribe(root_space, mc->key, channel);
+            kdb_task_space_subscribe(task, mc->key);
             break;
         case command_type_leavekey: /* leavekey */
-            error = kdb_space_forget_key(root_space, mc->key, channel);
+            kdb_task_space_forget_key(task, mc->key);
             break;
         case command_type_leave: /* leave */
-            error = kdb_space_forget(root_space, mc->key, channel);
+            kdb_task_space_forget(task, mc->key);
             break;
         case command_type_incr: /* incr */
-            error = kdb_space_incr_key(root_space, mc->key, mc->change_value, &mc->return_value);
+            kdb_task_space_incr_key(task, mc->key, mc->change_value);
             break;
         case command_type_decr: /* decr */
-            error = kdb_space_decr_key(root_space, mc->key, -1 * mc->change_value, &mc->return_value);
+            kdb_task_space_decr_key(task, mc->key, mc->change_value);
             break;
         default:
             error = db_error_command_not_impl;
     }
     return error;
-}
-
-void memcache_analyzer_return_success(memcache_analyzer_t* mc, kchannel_ref_t* channel) {
-    int          i      = 0;
-    kdb_value_t* v      = 0;
-    kstream_t*   stream = knet_channel_ref_get_stream(channel);
-    switch (mc->command_type) {
-        case command_type_set:
-        case command_type_add:
-        case command_type_addspace:
-        case command_type_replace:
-        case command_type_cas:
-            knet_stream_push_varg(stream, STORED);
-            break;
-        case command_type_get:
-            if (mc->return_value) {
-                v = kdb_space_value_get_value(mc->return_value);
-                knet_stream_push_varg(stream, VALUE_FORMAT, mc->key, kdb_value_get_cas_id(v), kdb_value_get_size(v));
-                knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-                knet_stream_push_varg(stream, MEMCACHED_CRLF);
-            }
-            knet_stream_push_varg(stream, END);
-            break;
-        case command_type_gets:
-            for (i = 0; i < mc->key_count; i++) {
-                if (mc->return_value_array[i]) {
-                    v = kdb_space_value_get_value(mc->return_value_array[i]);
-                    knet_stream_push_varg(stream, VALUE_FORMAT, mc->keys[i], kdb_value_get_cas_id(v), kdb_value_get_size(v));
-                    knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-                    knet_stream_push_varg(stream, MEMCACHED_CRLF);
-                }
-            }
-            knet_stream_push_varg(stream, END);
-            break;
-        case command_type_incr:
-        case command_type_decr:
-            v = kdb_space_value_get_value(mc->return_value);
-            knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-            knet_stream_push_varg(stream, MEMCACHED_CRLF);
-            break;
-        case command_type_delete:
-        case command_type_deletespace:
-            knet_stream_push_varg(stream, DELETED);
-            break;
-        case command_type_subkey:
-        case command_type_sub:
-        case command_type_leavekey:
-        case command_type_leave:
-            knet_stream_push_varg(stream, STORED);
-            break;
-        default:
-            break;
-    }
-}
-
-void memcache_analyzer_return_error(memcache_analyzer_t* mc, kchannel_ref_t* channel, int error) {
-    kstream_t* stream = knet_channel_ref_get_stream(channel);
-    switch (mc->command_type) {
-        case command_type_set:
-        case command_type_add:
-        case command_type_addspace:
-        case command_type_replace:
-            knet_stream_push_varg(stream, NOT_STORED);
-            break;
-        case command_type_cas:
-            if (db_error_cas_fail == error) {
-                knet_stream_push_varg(stream, EXIST);
-            } else {
-                knet_stream_push_varg(stream, NOT_FOUND);
-            }
-            break;
-        case command_type_get:
-        case command_type_gets:
-            knet_stream_push_varg(stream, END);
-            break;
-        case command_type_delete:
-        case command_type_deletespace:
-        case command_type_subkey:
-        case command_type_sub:
-        case command_type_leavekey:
-        case command_type_leave:
-            knet_stream_push_varg(stream, NOT_FOUND);
-            break;
-        case command_type_incr:
-        case command_type_decr:
-            knet_stream_push_varg(stream, NOT_FOUND);
-            break;
-        default:
-            break;
-    }
-}
-
-void memcache_analyzer_return(memcache_analyzer_t* mc, kchannel_ref_t* channel, int error) {
-    kstream_t* stream = knet_channel_ref_get_stream(channel);
-    if (mc->noreply) {
-        return;
-    }
-    switch (error) {
-        case db_error_ok:
-            memcache_analyzer_return_success(mc, channel);
-            break;
-        case db_error_invalid_format:
-            knet_stream_push_varg(stream, CLIENT_ERROR_FORMAT, INVALID_COMMAND_FORMAT, mc->command_line);
-            break;
-        case db_error_unknown_command:
-            knet_stream_push_varg(stream, ERROR);
-            break;
-        case db_error_command_not_impl:
-            knet_stream_push_varg(stream, SERVER_ERROR_FORMAT1, COMMOND_NOT_IMPLEMENTED, mc->command);
-            break;
-        case db_error_incr_decr_fail:
-            knet_stream_push_varg(stream, SERVER_ERROR_FORMAT2, mc->command_line);
-            break;
-        default:
-            memcache_analyzer_return_error(mc, channel, error);
-            break;
-    }
 }
 
 int publish_update(kchannel_ref_t* channel, kdb_space_value_t* sv) {
@@ -697,6 +552,59 @@ int publish_add(kchannel_ref_t* channel, kdb_space_value_t* sv) {
     return db_error_ok;
 }
 
+void memcache_analyzer_return_error(memcache_analyzer_t* mc, int error, kchannel_ref_t* channel) {
+    kstream_t* stream = knet_channel_ref_get_stream(channel);
+    switch (error) {
+        case db_error_invalid_format:
+            knet_stream_push_varg(stream, CLIENT_ERROR_FORMAT1, INVALID_COMMAND_FORMAT);
+            break;
+        case db_error_unknown_command:
+            knet_stream_push_varg(stream, ERROR);
+            break;
+        case db_error_command_not_impl:
+            knet_stream_push_varg(stream, SERVER_ERROR_FORMAT2, COMMOND_NOT_IMPLEMENTED);
+            break;
+        case db_error_incr_decr_fail:
+            knet_stream_push_varg(stream, SERVER_ERROR_FORMAT);
+            break;
+        default:
+            break;
+    }
+    switch (mc->command_type) {
+        case command_type_set:
+        case command_type_add:
+        case command_type_addspace:
+        case command_type_replace:
+            knet_stream_push_varg(stream, NOT_STORED);
+            break;
+        case command_type_cas:
+            if (db_error_cas_fail == error) {
+                knet_stream_push_varg(stream, EXIST);
+            } else {
+                knet_stream_push_varg(stream, NOT_FOUND);
+            }
+            break;
+        case command_type_get:
+        case command_type_gets:
+            knet_stream_push_varg(stream, END);
+            break;
+        case command_type_delete:
+        case command_type_deletespace:
+        case command_type_subkey:
+        case command_type_sub:
+        case command_type_leavekey:
+        case command_type_leave:
+            knet_stream_push_varg(stream, NOT_FOUND);
+            break;
+        case command_type_incr:
+        case command_type_decr:
+            knet_stream_push_varg(stream, NOT_FOUND);
+            break;
+        default:
+            break;
+    }
+}
+
 int memcache_analyzer_analyze(memcache_analyzer_t* mc, kchannel_ref_t* channel) {
     int        size   = COMMAND_LINE_LENGTH;
     int        error  = db_error_ok;
@@ -734,9 +642,9 @@ int memcache_analyzer_analyze(memcache_analyzer_t* mc, kchannel_ref_t* channel) 
         }
         /* 处理命令 */
         error = memcache_analyzer_do_command(mc, channel);
+    } else {
+        memcache_analyzer_return_error(mc, error, channel);
     }
-    /* 处理返回 */
-    memcache_analyzer_return(mc, channel, error);
     /* 重置 */
     memcache_analyzer_reset(mc);
     return error;

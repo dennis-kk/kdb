@@ -24,33 +24,37 @@
 
 #include "db_server.h"
 #include "db_space.h"
+#include "db_worker.h"
+#include "db_version.h"
+#include "db_util.h"
 #include "memcache_analyzer.h"
 
-kdb_server_t*  db_server   = 0; /* 服务器 */
-kloop_t*       server_loop = 0; /* 网络循环 */
-ktimer_loop_t* timer_loop  = 0; /* 定时器循环 */
-kdb_space_t*   root_space  = 0; /* 根空间 */
+kdb_server_t* db_server = 0; /* 服务器 */
 
 /**
  * 插件
  */
 struct _server_plugin_t {
-    kdb_server_on_after_start_t       start_cb;
-    kdb_server_on_after_stop_t        stop_cb;
-    kdb_server_on_key_after_add_t     add_cb;
-    kdb_server_on_key_after_update_t  update_cb;
-    kdb_server_on_key_before_delete_t delete_cb;
-    kdb_server_malloc_t               malloc_cb;
-    kdb_server_realloc_t              realloc_cb;
-    kdb_server_free_t                 free_cb;
+    kdb_server_on_after_start_t       start_cb;   /* start回调 */
+    kdb_server_on_after_stop_t        stop_cb;    /* stop回调 */
+    kdb_server_on_key_after_add_t     add_cb;     /* add回调 */
+    kdb_server_on_key_after_update_t  update_cb;  /* update回调 */
+    kdb_server_on_key_before_delete_t delete_cb;  /* delete回调 */
+    kdb_server_malloc_t               malloc_cb;  /* malloc */
+    kdb_server_realloc_t              realloc_cb; /* realloc */
+    kdb_server_free_t                 free_cb;    /* free */
 };
 
 /**
  * 服务器
  */
 struct _db_server_t {
-    kthread_runner_t*   runner;                       /* 工作线程 */
+    kthread_runner_t*   runner;                       /* 网络线程 */
+    kdb_worker_t*       worker;                       /* 工作线程 */
     kdb_server_plugin_t plugin;                       /* 插件 */
+    kdb_space_t*        root_space;                   /* 根空间 */
+    kloop_t*            server_loop;                  /* 网络循环 */
+    ktimer_loop_t*      timer_loop;                   /* 定时器循环 */
     char                plugin_path[PLUGIN_MAX_PATH]; /* 插件文件路径 */
     char                ip[32];                       /* IP */
     int                 port;                         /* 端口 */
@@ -78,14 +82,17 @@ kdb_server_t* kdb_server_create() {
 
 void kdb_server_destroy(kdb_server_t* srv) {
     assert(srv);
-    if (server_loop) {
-        knet_loop_destroy(server_loop);
+    if (srv->server_loop) {
+        knet_loop_destroy(srv->server_loop);
     }
-    if (timer_loop) {
-        ktimer_loop_destroy(timer_loop);
+    if (srv->timer_loop) {
+        ktimer_loop_destroy(srv->timer_loop);
     }
-    if (root_space) {
-        kdb_space_destroy(root_space);
+    if (srv->worker) {
+        kdb_worker_destroy(srv->worker);
+    }
+    if (srv->root_space) {
+        kdb_space_destroy(srv->root_space);
     }
     if (srv->action_buffer) {
         destroy(srv->action_buffer);
@@ -100,30 +107,18 @@ void kdb_server_destroy(kdb_server_t* srv) {
     destroy(srv);
 }
 
-int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
-    kchannel_ref_t* acceptor = 0;
-    assert(srv);
-    kdb_server_welcome();
-    /* 命令行参数 */
-    kdb_server_parse_command_line(srv, argc, argv);
-    /* 加载插件 */
-    if (srv->plugin_path[0]) {
-        kdb_server_load_plugin(srv, srv->plugin_path);
-    } else {
-#       ifdef WIN32
-        kdb_server_load_plugin(srv, "db_plugin.dll");
-#       else
-        kdb_server_load_plugin(srv, "db_plugin.so");
-#       endif /* WIN32 */
+int kdb_server_start_worker(kdb_server_t* srv) {
+    srv->worker = kdb_worker_create();
+    assert(srv->worker);
+    if (error_ok != kdb_worker_start(srv->worker)) {
+        return db_error_start_worker;
     }
-    /* 建立根空间 */
-    root_space = kdb_space_create(0, srv, srv->root_space_buckets);
-    assert(root_space);
-    /* 建立网络循环 */
-    server_loop = knet_loop_create();
-    assert(server_loop);
-    /* 建立监听器 */
-    acceptor = knet_loop_create_channel(server_loop, 128, ACTION_BUFFER_LENGTH);
+    return db_error_ok;
+}
+
+int kdb_server_start_acceptor(kdb_server_t* srv) {
+    kchannel_ref_t* acceptor = 0;
+    acceptor = knet_loop_create_channel(srv->server_loop, 128, ACTION_BUFFER_LENGTH);
     assert(acceptor);
     knet_channel_ref_set_cb(acceptor, acceptor_cb);
     printf("Starting @ %s:%d ", srv->ip, srv->port);
@@ -131,16 +126,54 @@ int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
         printf("[Fail]\n");
         return db_error_listen_fail;
     }
-    /* 建立定时器循环 */
-    timer_loop = ktimer_loop_create(srv->timer_freq, srv->timer_slot);
-    assert(timer_loop);
-    /* 建立工作线程 */
+    return db_error_ok;
+}
+
+int kdb_server_start_main(kdb_server_t* srv) {
     srv->runner = thread_runner_create(0, 0);
     assert(srv->runner);
-    /* 启动工作线程 */
-    if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", server_loop, timer_loop)) {
+    /* 启动主线程 */
+    if (error_ok != thread_runner_start_multi_loop_varg(srv->runner, 0, "lt", srv->server_loop, srv->timer_loop)) {
         printf("[Fail]\n");
         return db_error_server_start_thread_fail;
+    }
+    return db_error_ok;
+}
+
+int kdb_server_start(kdb_server_t* srv, int argc, char** argv) {
+    int error = db_error_ok;
+    assert(srv);
+    kdb_server_welcome();
+    /* 命令行参数 */
+    kdb_server_parse_command_line(srv, argc, argv);
+    /* 加载插件 */
+    error = kdb_server_load_plugin(srv, srv->plugin_path);
+    if (db_error_ok != error) {
+        return error;
+    }
+    /* 启动工作线程 */
+    error = kdb_server_start_worker(srv);
+    if (db_error_ok != error) {
+        return error;
+    }
+    /* 建立根空间 */
+    srv->root_space = kdb_space_create(0, srv, srv->root_space_buckets);
+    assert(srv->root_space);
+    /* 建立网络循环 */
+    srv->server_loop = knet_loop_create();
+    assert(srv->server_loop);
+    /* 建立监听器 */
+    error = kdb_server_start_acceptor(srv);
+    if (db_error_ok != error) {
+        return error;
+    }
+    /* 建立定时器循环 */
+    srv->timer_loop = ktimer_loop_create(srv->timer_freq, srv->timer_slot);
+    assert(srv->timer_loop);
+    /* 建立网络线程 */
+    error = kdb_server_start_main(srv);
+    if (db_error_ok != error) {
+        return error;
     }
     if (srv->plugin.start_cb) {
         srv->plugin.start_cb(srv);
@@ -154,12 +187,18 @@ void kdb_server_stop(kdb_server_t* srv) {
     if (srv->runner) {
         thread_runner_stop(srv->runner);
     }
+    if (srv->worker) {
+        kdb_worker_stop(srv->worker);
+    }
 }
 
 void kdb_server_wait_for_stop(kdb_server_t* srv) {
     assert(srv);
     if (srv->runner) {
         thread_runner_join(srv->runner);
+    }
+    if (srv->worker) {
+        kdb_worker_wait_for_stop(srv->worker);
     }
     if (srv->plugin.stop_cb) {
         srv->plugin.stop_cb(srv);
@@ -184,11 +223,6 @@ char* kdb_server_get_action_buffer(kdb_server_t* srv) {
 int kdb_server_get_action_buffer_length(kdb_server_t* srv) {
     (void)srv;
     return ACTION_BUFFER_LENGTH;
-}
-
-kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv) {
-    (void)srv;
-    return root_space;
 }
 
 void acceptor_cb(kchannel_ref_t* channel, knet_channel_cb_event_e e) {
@@ -278,6 +312,14 @@ const char* get_exe_path() {
 }
 
 int kdb_server_load_plugin(kdb_server_t* srv, const char* file) {
+    if (!srv->plugin_path[0]) {
+#       ifdef WIN32
+        kdb_server_load_plugin(srv, "db_plugin.dll");
+#       else
+        kdb_server_load_plugin(srv, "db_plugin.so");
+#       endif /* WIN32 */
+        return db_error_ok;
+    }
 #	ifdef WIN32
     SetDllDirectoryA(get_exe_path());
     srv->plugin_handle = LoadLibraryA(file);
@@ -396,4 +438,15 @@ kdb_server_realloc_t kdb_server_get_realloc(kdb_server_t* srv) {
 kdb_server_free_t kdb_server_get_free(kdb_server_t* srv) {
     assert(srv);
     return srv->plugin.free_cb;
+}
+
+int kdb_server_push_task(kdb_server_t* srv, kdb_task_t* task) {
+    assert(srv);
+    assert(task);
+    return kdb_worker_push(srv->worker, task);
+}
+
+kdb_space_t* kdb_server_get_root_space(kdb_server_t* srv) {
+    assert(srv);
+    return srv->root_space;
 }

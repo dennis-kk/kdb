@@ -24,38 +24,9 @@
 
 #include "db_space.h"
 #include "db_server.h"
+#include "db_task.h"
+#include "db_util.h"
 #include "memcache_analyzer.h"
-#include "db_spinlock.h"
-
-static void* kdb_malloc(int size) {
-    if (db_server) {
-        if (kdb_server_get_malloc(db_server)) {
-            return kdb_server_get_malloc(db_server)(size);
-        }
-    }
-    return create_raw(size);
-}
-
-static void* kdb_realloc(void* p, int size) {
-    if (db_server) {
-        if (kdb_server_get_realloc(db_server)) {
-            return kdb_server_get_realloc(db_server)(p, size);
-        }
-    }
-    return rcreate_raw(p, size);
-}
-
-static void kdb_free(void* p) {
-    if (db_server) {
-        if (kdb_server_get_free(db_server)) {
-            kdb_server_get_free(db_server)(p);
-        }
-    }
-    destroy(p);
-}
-
-#define KDB_CREATE(type) \
-    (type*)kdb_malloc(sizeof(type))
 
 /**
  * 值变化发布类型
@@ -63,7 +34,7 @@ static void kdb_free(void* p) {
 enum _db_sub_type_e {
     kdb_sub_type_update = 1, /* 更新 */
     kdb_sub_type_delete = 2, /* 销毁 */
-    kdb_sub_type_add = 3,    /* 新增 */
+    kdb_sub_type_add = 4,    /* 新增 */
 };
 
 /**
@@ -79,32 +50,29 @@ typedef enum _db_space_op_type_e {
  * 值
  */
 struct _db_value_t {
-    void*    v;            /* 属性 */
-    int      size;         /* 当前长度 */
-    int      max_size;     /* 最大长度 */
-    uint32_t flags;        /* memcached flags */
-    uint64_t cas_id;       /* memcached cas unique */
-    int      dirty;        /* 脏标记 */
+    void*    v;        /* 属性 */
+    int      size;     /* 当前长度 */
+    int      max_size; /* 最大长度 */
+    uint32_t flags;    /* memcached flags */
+    uint64_t cas_id;   /* memcached cas unique */
+    int      dirty;    /* 脏标记 */
 };
 
 /**
  * 空间值
  */
 struct _db_space_value_t {
-    uint64_t     id;      /* UUID */
-    uint32_t     exptime; /* memcached exptime*/
-    kdb_space_t* owner;   /* 所属空间 */
-    char*        name;    /* 空间/值名字 */
+    uint64_t               id;           /* UUID */
+    uint32_t               exptime;      /* memcached exptime*/
+    kdb_space_t*           owner;        /* 所属空间 */
+    char*                  name;         /* 空间/值名字 */
+    khash_t*               sub_channels; /* 订阅了此属性/空间的管道 */
+    kdb_space_value_type_e type;         /* 类型 */
+    void*                  ptr;          /* 用户指针，用于插件 */
     union {
         kdb_value_t* value; /* 属性 */
         kdb_space_t* space; /* 空间 */
     };
-    khash_t*               sub_channels; /* 订阅了此属性/空间的管道 */
-    kdb_space_value_type_e type;         /* 类型 */
-    kdb_spinlock_t         lock;         /* 保留 - 锁 */
-    atomic_counter_t       ref;          /* 保留 - 引用计数 */
-    atomic_counter_t       del;          /* 保留 - 删除标记 */
-    void*                  ptr;          /* 用户指针，用于插件 */
 };
 
 /**
@@ -117,13 +85,10 @@ struct _db_space_t {
     kdb_server_t*      srv;     /* 服务器 */
     kdb_space_value_t* sv;      /* 存储本结构体指针的空间值 */
     char*              path;    /* 空间全路径 */
-    kdb_spinlock_t     lock;    /* 保留 - 锁 */
-    atomic_counter_t   ref;     /* 保留 - 引用计数 */
-    atomic_counter_t   del;     /* 保留 - 删除标记 */
 };
 
 kdb_value_t* kdb_value_create(const void* value, int size) {
-    kdb_value_t* v = KDB_CREATE(kdb_value_t);
+    kdb_value_t* v = kdb_create_type(kdb_value_t);
     memset(v, 0, sizeof(kdb_value_t));
     v->v = kdb_malloc(size);
     memcpy(v->v, value, size);
@@ -137,9 +102,9 @@ void kdb_value_destroy(kdb_value_t* value) {
     assert(value);    
     /* 销毁 */
     if (value->v) {
-        destroy(value->v);
+        kdb_free(value->v);
     }
-    destroy(value);
+    kdb_free(value);
 }
 
 void* kdb_value_get_value(kdb_value_t* value) {
@@ -211,11 +176,11 @@ void kdb_space_value_publish(kdb_space_value_t* value, kdb_sub_type_e type) {
         /* 向所有订阅者推送 */
         hash_for_each_safe(value->sub_channels, hv) {
             channel = (kchannel_ref_t*)hash_value_get_value(hv);
-            if (type == kdb_sub_type_update) { /* 更新 */
+            if (type & kdb_sub_type_update) { /* 更新 */
                 error = publish_update(channel, value);
-            } else if (type == kdb_sub_type_delete) { /* 销毁 */
+            } else if (type & kdb_sub_type_delete) { /* 销毁 */
                 error = publish_delete(channel, value);
-            } else if (type == kdb_sub_type_add) { /* 增加 */
+            } else if (type & kdb_sub_type_add) { /* 增加 */
                 error = publish_add(channel, value);
             }
             if (db_error_ok != error) { /* 管道失效, 取消订阅 */
@@ -254,13 +219,12 @@ void kdb_check_top_level_sub(kdb_space_value_t* v) {
 }
 
 kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime) {
-    kdb_space_value_t* v = KDB_CREATE(kdb_space_value_t);
+    kdb_space_value_t* v = kdb_create_type(kdb_space_value_t);
     assert(v);
     memset(v, 0, sizeof(kdb_space_value_t));
     v->type  = space_value_type_value;
     v->owner = owner;
     v->id    = uuid_create(); /* UUID */
-    kdb_spinlock_init(&v->lock, db_space_op_type_none);
     v->name  = kdb_malloc(strlen(name) + 1);
     assert(v->name);
     strcpy(v->name, name); /* 值名称 */
@@ -276,14 +240,13 @@ kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* 
     kdb_space_value_t* v   = 0;
     kdb_server_t*      srv = 0;
     assert(owner);
-    v = KDB_CREATE(kdb_space_value_t);
+    v = kdb_create_type(kdb_space_value_t);
     assert(v);
     srv = kdb_space_get_server(owner);
     memset(v, 0, sizeof(kdb_space_value_t));
     v->type  = space_value_type_space;
     v->owner = owner;
     v->id    = uuid_create(); /* UUID */
-    kdb_spinlock_init(&v->lock, db_space_op_type_none);
     v->name  = kdb_malloc(strlen(name) + 1); /* 空间名称 */
     assert(v->name);
     strcpy(v->name, name);
@@ -300,10 +263,6 @@ kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* 
 
 void kdb_space_value_destroy(kdb_space_value_t* v) {
     assert(v);
-    if (v->ref) { /* 引用计数不为零 */
-        atomic_counter_set(&v->del, 1); /* 设置删除标记 */
-        return;
-    }
     if (v->type == space_value_type_value) {
         /* 发布值销毁事件 */
         kdb_space_value_publish(v, kdb_sub_type_delete);
@@ -313,8 +272,16 @@ void kdb_space_value_destroy(kdb_space_value_t* v) {
         kdb_space_value_publish(v, kdb_sub_type_delete);
         kdb_space_destroy(v->space);
     }
-    destroy(v->name);
-    destroy(v);
+    kdb_free(v->name);
+    kdb_free(v);
+}
+
+kdb_server_t* kdb_space_get_server(kdb_space_t* space) {
+    return space->srv;
+}
+
+int kdb_space_get_buckets(kdb_space_t* space) {
+    return space->buckets;
 }
 
 const char* kdb_space_get_path(kdb_space_t* space) {
@@ -603,7 +570,7 @@ int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space, const c
 
 int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id) {
     kdb_space_value_t* v     = 0;
-    int               error = db_error_ok;
+    int                error = db_error_ok;
     assert(space);
     assert(path);
     assert(name);
@@ -920,12 +887,11 @@ int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, co
 }
 
 kdb_space_t* kdb_space_create(kdb_space_t* parent, kdb_server_t* srv, int buckets) {
-    kdb_space_t* space = KDB_CREATE(kdb_space_t);
+    kdb_space_t* space = kdb_create_type(kdb_space_t);
     memset(space, 0, sizeof(kdb_space_t));
     assert(space);
     space->parent  = parent;
     space->srv     = srv;
-    kdb_spinlock_init(&space->lock, db_space_op_type_none);
     space->h       = hash_create(buckets, value_dtor);
     assert(space->h);
     space->buckets = buckets;
@@ -934,13 +900,9 @@ kdb_space_t* kdb_space_create(kdb_space_t* parent, kdb_server_t* srv, int bucket
 
 void kdb_space_destroy(kdb_space_t* space) {
     assert(space);
-    if (space->ref) {
-        atomic_counter_set(&space->del, 1);
-        return;
-    }
     hash_destroy(space->h);
-    destroy(space->path);
-    destroy(space);
+    kdb_free(space->path);
+    kdb_free(space);
 }
 
 int kdb_space_set_key(kdb_space_t* space, const char* path, const void* value, int size, uint32_t flags, uint32_t exptime) {
@@ -1282,93 +1244,4 @@ int kdb_space_del_space(kdb_space_t* space, const char* path) {
         space = next_space;
     }
     return error;
-}
-
-kdb_server_t* kdb_space_get_server(kdb_space_t* space) {
-    return space->srv;
-}
-
-int kdb_space_get_buckets(kdb_space_t* space) {
-    return space->buckets;
-}
-
-int isnumber(void* s, int size) {
-    char* p = (char*)s;
-    if (*p == '-') {
-        p++;
-        size--;
-    }
-    while ((*p >= '0') && (*p <= '9') && size) {
-        p++;
-        size--;
-    }
-    return (size ? 0 : 1);
-}
-
-long long atoll_s(void* s, int size) {  
-    int       minus = 0;
-    long long value = 0;
-    char*     p     = (char*)s;
-    if (*p == '-') {
-        minus++;
-        p++;
-        size--;
-    }
-    while ((*p >= '0') && (*p <= '9') && size) {
-        value *= 10;
-        value += *p - '0';
-        p++;
-        size--;
-    }
-    return minus ? 0 - value : value;
-}
-
-char* kdb_lltoa(long long ll, char* buffer, int* size) {
-    int len = 0;
-    assert(buffer);
-    assert(size);
-#if defined(WIN32)
-    len = _snprintf(buffer, *size, "%lld", ll);
-    if ((len >= *size) || (len < 0)) {
-        return 0;
-    }
-#else
-    len = snprintf(buffer, *size, "%lld", ll);
-    if (len <= 0) {
-        return 0;
-    }
-#endif /* WIN32 */
-    buffer[len] = 0;
-    *size = len;
-    return buffer;
-}
-
-int kdb_space_incref(kdb_space_t* space) {
-    assert(space);
-    return (int)atomic_counter_inc(&space->ref);
-}
-
-int kdb_space_decref(kdb_space_t* space) {
-    atomic_counter_t ref = 0;
-    assert(space);
-    ref = atomic_counter_dec(&space->ref);
-    if (!space->ref && space->del) {
-        kdb_space_destroy(space);
-    }
-    return (int)ref;
-}
-
-int kdb_space_value_incref(kdb_space_value_t* v) {
-    assert(v);
-    return (int)atomic_counter_inc(&v->ref);
-}
-
-int kdb_space_value_decref(kdb_space_value_t* v) {
-    atomic_counter_t ref = 0;
-    assert(v);
-    ref = atomic_counter_dec(&v->ref);
-    if (!v->ref && v->del) {
-        kdb_space_value_destroy(v);
-    }
-    return (int)ref;
 }

@@ -36,7 +36,8 @@
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_subscribe_key(kdb_space_t* space, const char* path, kchannel_ref_t* channel);
+int kdb_space_subscribe_key(kdb_space_t* space, const char* path,
+    kchannel_ref_t* channel);
 
 /**
  * 订阅空间（包含子空间）内所有属性
@@ -46,7 +47,8 @@ int kdb_space_subscribe_key(kdb_space_t* space, const char* path, kchannel_ref_t
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_subscribe(kdb_space_t* space, const char* path, kchannel_ref_t* channel);
+int kdb_space_subscribe(kdb_space_t* space, const char* path,
+    kchannel_ref_t* channel);
 
 /**
  * 取消订阅空间属性
@@ -56,7 +58,8 @@ int kdb_space_subscribe(kdb_space_t* space, const char* path, kchannel_ref_t* ch
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_forget_key(kdb_space_t* space, const char* path, kchannel_ref_t* channel);
+int kdb_space_forget_key(kdb_space_t* space, const char* path,
+    kchannel_ref_t* channel);
 
 /**
  * 取消订阅(包含子空间)
@@ -66,7 +69,8 @@ int kdb_space_forget_key(kdb_space_t* space, const char* path, kchannel_ref_t* c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_forget(kdb_space_t* space, const char* path, kchannel_ref_t* channel);
+int kdb_space_forget(kdb_space_t* space, const char* path,
+    kchannel_ref_t* channel);
 
 
 /**
@@ -76,7 +80,8 @@ int kdb_space_forget(kdb_space_t* space, const char* path, kchannel_ref_t* chann
  * @param buckets 空间内哈希表桶的数量
  * @return kdb_space_t实例
  */
-kdb_space_t* kdb_space_create(kdb_space_t* parent, kdb_server_t* srv, int buckets);
+kdb_space_t* kdb_space_create(kdb_space_t* parent, kdb_server_t* srv,
+    int buckets);
 
 /**
  * 销毁空间
@@ -147,8 +152,9 @@ void kdb_space_value_publish(kdb_space_value_t* value, kdb_sub_type_e type);
  * @param exptime memcached exptime
  * @return kdb_space_value_t实例
  */
-kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner, const char* name,
-    const void* value, int size, uint32_t flags, uint32_t exptime);
+kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner,
+    const char* name, const void* value, int size, uint32_t flags,
+        uint32_t exptime);
 
 /**
  * 建立空间内子空间
@@ -157,8 +163,8 @@ kdb_space_value_t* kdb_space_value_create_value(kdb_space_t* owner, const char* 
  * @param exptime memcached exptime
  * @return kdb_space_value_t实例
  */
-kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner, const char* full_path,
-    const char* name, uint32_t exptime);
+kdb_space_value_t* kdb_space_value_create_space(kdb_space_t* owner,
+    const char* full_path, const char* name, uint32_t exptime);
 
 /**
  * 销毁空间值
@@ -194,7 +200,8 @@ kdb_space_t* kdb_space_value_get_space(kdb_space_value_t* v);
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_value_subscribe_space(kdb_space_value_t* v, kchannel_ref_t* channel);
+int kdb_space_value_subscribe_space(kdb_space_value_t* v,
+    kchannel_ref_t* channel);
 
 /**
  * 取消订阅空间内所有属性，包含子空间
@@ -203,7 +210,8 @@ int kdb_space_value_subscribe_space(kdb_space_value_t* v, kchannel_ref_t* channe
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_value_forget_space(kdb_space_value_t* v, kchannel_ref_t* channel);
+int kdb_space_value_forget_space(kdb_space_value_t* v,
+    kchannel_ref_t* channel);
 
 /**
  * 空间值哈希表销毁回调
@@ -239,8 +247,9 @@ int kdb_iterate_path(const char* path, char* name, int* name_len);
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_set_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* full_path, const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
+int kdb_space_set_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* full_path, const char* name,
+        const void* value, int size, uint32_t flags, uint32_t exptime);
 
 /**
  * 向空间内添加属性值
@@ -255,8 +264,9 @@ int kdb_space_set_key_path(kdb_space_t* space, kdb_space_t** next_space, const c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_add_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, const void* value, int size, uint32_t flags, uint32_t exptime);
+int kdb_space_add_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, const void* value, int size,
+        uint32_t flags, uint32_t exptime);
 
 /**
  * 获取空间内属性值
@@ -268,8 +278,8 @@ int kdb_space_add_key_path(kdb_space_t* space, kdb_space_t** next_space, const c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_get_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kdb_space_value_t** value);
+int kdb_space_get_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kdb_space_value_t** value);
 
 /**
  * 删除并销毁空间内属性值
@@ -280,8 +290,8 @@ int kdb_space_get_key_path(kdb_space_t* space, kdb_space_t** next_space, const c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name);
+int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name);
 
 /**
  * 更新空间内属性值
@@ -297,8 +307,9 @@ int kdb_space_del_key_path(kdb_space_t* space, kdb_space_t** next_space, const c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, const void* value, int size, uint32_t flags, uint32_t exptime, uint64_t cas_id);
+int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, const void* value, int size,
+        uint32_t flags, uint32_t exptime, uint64_t cas_id);
 
 /**
  * 递增空间内属性值
@@ -311,8 +322,9 @@ int kdb_space_update_key_path(kdb_space_t* space, kdb_space_t** next_space, cons
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, uint64_t delta, kdb_space_value_t** value);
+int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, uint64_t delta,
+        kdb_space_value_t** value);
 
 /**
  * 订阅属性值
@@ -324,8 +336,8 @@ int kdb_space_incr_decr_key_path(kdb_space_t* space, kdb_space_t** next_space, c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kchannel_ref_t* channel);
+int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kchannel_ref_t* channel);
 
 /**
  * 取消订阅属性值
@@ -337,8 +349,8 @@ int kdb_space_subscribe_key_path(kdb_space_t* space, kdb_space_t** next_space, c
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kchannel_ref_t* channel);
+int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kchannel_ref_t* channel);
 
 /**
  * 取消订阅空间
@@ -350,8 +362,8 @@ int kdb_space_forget_key_path(kdb_space_t* space, kdb_space_t** next_space, cons
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kchannel_ref_t* channel);
+int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kchannel_ref_t* channel);
 
 /**
  * 添加子孙空间
@@ -364,8 +376,8 @@ int kdb_space_forget_space_path(kdb_space_t* space, kdb_space_t** next_space, co
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_add_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    char* full_path, const char* name, uint32_t exptime);
+int kdb_space_add_space_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, char* full_path, const char* name, uint32_t exptime);
 
 /**
  * 获取子孙空间
@@ -377,8 +389,8 @@ int kdb_space_add_space_path(kdb_space_t* space, kdb_space_t** next_space, const
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_get_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kdb_space_t** child);
+int kdb_space_get_space_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kdb_space_t** child);
 
 /**
  * 销毁子孙空间
@@ -389,8 +401,8 @@ int kdb_space_get_space_path(kdb_space_t* space, kdb_space_t** next_space, const
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_del_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name);
+int kdb_space_del_space_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name);
 
 /**
  * 订阅子孙空间
@@ -402,37 +414,7 @@ int kdb_space_del_space_path(kdb_space_t* space, kdb_space_t** next_space, const
  * @retval db_error_ok 成功
  * @retval 其他 失败
  */
-int kdb_space_subscribe_space_path(kdb_space_t* space, kdb_space_t** next_space, const char* path,
-    const char* name, kchannel_ref_t* channel);
-
-/**
- * 检查内存块是否为字符串描述的数字
- * @param s 内存块指针
- * @param size 内存块长度
- * @retval 0 不是
- * @retval 1 是
- */
-int isnumber(void* s, int size);
-
-/**
- * long long转换为字符串
- * @param ll long long
- * @param buffer 转换后存放的缓冲区
- * @param size 缓冲区长度
- * @return 转换后的字符串指针
- */
-char* kdb_lltoa(long long ll, char* buffer, int* size);
-
-/**
- * 字符串转long long
- * @param s 字符串
- * @param size 长度
- * @return long long
- */
-long long atoll_s(void* s, int size);
-
-/*! 字符串遍历宏 */
-#define for_each_char(c, s) \
-    for (c = *s++; (c); c = *s++)
+int kdb_space_subscribe_space_path(kdb_space_t* space, kdb_space_t** next_space,
+    const char* path, const char* name, kchannel_ref_t* channel);
 
 #endif /* DB_SPACE_H */

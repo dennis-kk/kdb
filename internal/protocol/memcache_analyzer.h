@@ -199,38 +199,4 @@ int publish_delete(kchannel_ref_t* channel, kdb_space_value_t* sv);
  */
 int publish_add(kchannel_ref_t* channel, kdb_space_value_t* sv);
 
-#define EQUAL(a, b) \
-    !strcmp(a, b)
-
-#define EQUAL_RETURN(a, b, error) \
-    do { \
-        if (EQUAL(a, b)) { \
-            return error; \
-        } \
-    } while(0);
-
-#define NOT_EQUAL_RETURN(a, b, error) \
-    do { \
-        if (!EQUAL(a, b)) { \
-            return error; \
-        } \
-    } while(0);
-
-#define GET_FORWARD(buffer, key, size, pos, bytes, error) \
-    do { \
-        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
-        if (!bytes) { \
-            return error; \
-        } \
-        pos += bytes; \
-    } while(0);
-
-#define GET_HOLD(buffer, key, size, pos, bytes, error) \
-    do { \
-        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
-        if (!bytes) { \
-            return error; \
-        } \
-    } while(0);
-
 #endif /* MEMCACHE_ANALYZER_H */

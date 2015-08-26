@@ -156,10 +156,28 @@ void kdb_server_welcome();
 void kdb_server_parse_command_line(kdb_server_t* srv, int argc, char** argv);
 
 /**
- * 获取可执行文件目录
- * @return 可执行文件目录
+ * 启动主线程
+ * @param srv kdb_server_t实例
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
  */
-const char* get_exe_path();
+int kdb_server_start_main(kdb_server_t* srv);
+
+/**
+ * 启动工作线程
+ * @param srv kdb_server_t实例
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int kdb_server_start_worker(kdb_server_t* srv);
+
+/**
+ * 启动工作监听器
+ * @param srv kdb_server_t实例
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int kdb_server_start_acceptor(kdb_server_t* srv);
 
 /**
  * 获取malloc函数指针
@@ -181,5 +199,14 @@ kdb_server_realloc_t kdb_server_get_realloc(kdb_server_t* srv);
  * @return free函数指针
  */
 kdb_server_free_t kdb_server_get_free(kdb_server_t* srv);
+
+/**
+ * 添加到工作线程队列
+ * @param srv kdb_server_t实例
+ * @param task kdb_task_t实例
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int kdb_server_push_task(kdb_server_t* srv, kdb_task_t* task);
 
 #endif /* DB_SERVER_H */

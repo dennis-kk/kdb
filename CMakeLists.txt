@@ -18,7 +18,10 @@ SET(CMAKE_C_FLAGS "-g -O2 -Wall")
 add_executable(kdb
 	internal/server/db_server.c
 	internal/server/db_space.c
-	internal/server/db_spinlock.c
+	internal/server/db_util.c
+	internal/server/db_queue.c
+	internal/server/db_task.c
+	internal/server/db_worker.c
 	internal/server/test.c
 	internal/protocol/memcache_analyzer.c
 )
