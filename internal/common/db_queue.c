@@ -93,6 +93,18 @@ void* kdb_queue_pop(kdb_queue_t* kq) {
     return item.object;
 }
 
+void* kdb_queue_peek(kdb_queue_t* kq) {
+    kdb_queue_item_t item;
+    assert(kq);
+    lock_lock(kq->lock);
+    if (sizeof(kdb_queue_item_t) != ringbuffer_copy(kq->rb, (char*)&item, sizeof(kdb_queue_item_t))) {
+        lock_unlock(kq->lock);
+        return 0;
+    }
+    lock_unlock(kq->lock);
+    return item.object;
+}
+
 int kdb_queue_get_count(kdb_queue_t* kq) {
     assert(kq);
     return kq->count;

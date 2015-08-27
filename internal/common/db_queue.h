@@ -58,6 +58,14 @@ int kdb_queue_push(kdb_queue_t* kq, void* ptr);
 void* kdb_queue_pop(kdb_queue_t* kq);
 
 /**
+ * 从队列头取出一个指针, 但不从队列内删除
+ * @param kq kdb_queue_t实例
+ * @retval 0 队列为空
+ * @retval 非零 指针
+ */
+void* kdb_queue_peek(kdb_queue_t* kq);
+
+/**
  * 获取队列内元素个数
  * @param kq kdb_queue_t实例
  * @return 元素个数
