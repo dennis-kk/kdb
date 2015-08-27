@@ -115,12 +115,12 @@ int memcache_analyzer_do_analyze_incr_decr(memcache_analyzer_t* mc, const char* 
     GET_FORWARD(buffer, mc->change_value_char, CHANGE_VALUE_LENGTH - 1, pos, bytes, db_error_invalid_format);
     mc->change_value = atoll(mc->change_value_char);
     /* noreply */
-    EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
+    EQUAL_RETURN(mc->noreply_char, CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_HOLD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format); /* \r\n? */
     return db_error_ok;
 }
 
@@ -134,12 +134,12 @@ int memcache_analyzer_do_analyze_sub(memcache_analyzer_t* mc, const char* buffer
     GET_FORWARD(buffer, mc->key, MAX_PATH_SIZE - 1,  pos, bytes, db_error_invalid_format);
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
+    EQUAL_RETURN(mc->noreply_char, CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_HOLD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format);
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format);
     return db_error_ok;
 }
 
@@ -153,12 +153,12 @@ int memcache_analyzer_do_analyze_leave(memcache_analyzer_t* mc, const char* buff
     GET_FORWARD(buffer, mc->key, MAX_PATH_SIZE - 1,  pos, bytes, db_error_invalid_format);
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n? */
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
+    EQUAL_RETURN(mc->noreply_char, CRLF, db_error_ok); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format);
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format);
     return db_error_ok;
 }
 
@@ -171,12 +171,12 @@ int memcache_analyzer_do_analyze_delete(memcache_analyzer_t* mc, const char* buf
     GET_FORWARD(buffer, mc->key, MAX_PATH_SIZE - 1,  pos, bytes, db_error_invalid_format);
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n */
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
+    EQUAL_RETURN(mc->noreply_char, CRLF, db_error_ok); /* \r\n */
+    NOT_EQUAL_RETURN(mc->noreply_char, NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_HOLD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format);
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format);
     return db_error_ok;
 }
 
@@ -192,7 +192,7 @@ int memcache_analyzer_do_analyze_get(memcache_analyzer_t* mc, const char* buffer
         for (;;) {
             /* key */
             GET_FORWARD(buffer, mc->keys[mc->key_count], MAX_PATH_SIZE - 1, pos, bytes, db_error_ok);
-            EQUAL_RETURN(mc->keys[mc->key_count], MEMCACHED_CRLF, db_error_ok);
+            EQUAL_RETURN(mc->keys[mc->key_count], CRLF, db_error_ok);
             mc->key_count += 1;
         }
     }
@@ -224,12 +224,12 @@ int memcache_analyzer_do_analyze_store(memcache_analyzer_t* mc, const char* buff
     }
     /* noreply */
     GET_FORWARD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_ok); /* \r\n?*/
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_NOREPLY, db_error_invalid_format); /* noreply? */
+    EQUAL_RETURN(mc->noreply_char, CRLF, db_error_ok); /* \r\n?*/
+    NOT_EQUAL_RETURN(mc->noreply_char, NOREPLY, db_error_invalid_format); /* noreply? */
     mc->noreply = 1;
     /* \r\n */
     GET_HOLD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format); /* \r\n? */
     return db_error_ok;
 }
 
@@ -242,11 +242,11 @@ int memcache_analyzer_do_analyze_addspace(memcache_analyzer_t* mc, const char* b
     GET_FORWARD(buffer, mc->key, MAX_PATH_SIZE - 1, pos, bytes, db_error_invalid_format);
     /* exptime */
     GET_FORWARD(buffer, mc->exptime_char, EXPTIME_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    EQUAL_RETURN(mc->exptime_char, MEMCACHED_CRLF, db_error_invalid_format); /* \r\n?*/
+    EQUAL_RETURN(mc->exptime_char, CRLF, db_error_invalid_format); /* \r\n?*/
     mc->exptime = atol(mc->exptime_char);
     /* \r\n */
     GET_HOLD(buffer, mc->noreply_char, NOREPLY_LENGTH - 1, pos, bytes, db_error_invalid_format);
-    NOT_EQUAL_RETURN(mc->noreply_char, MEMCACHED_CRLF, db_error_invalid_format); /* \r\n? */
+    NOT_EQUAL_RETURN(mc->noreply_char, CRLF, db_error_invalid_format); /* \r\n? */
     return db_error_ok;
 }
 
@@ -614,7 +614,7 @@ int memcache_analyzer_analyze(memcache_analyzer_t* mc, kchannel_ref_t* channel) 
     assert(channel);
     stream = knet_channel_ref_get_stream(channel);
     if (!mc->bytes) {
-        if (error_ok != knet_stream_pop_until(stream, MEMCACHED_CRLF, mc->command_line, &size)) {
+        if (error_ok != knet_stream_pop_until(stream, CRLF, mc->command_line, &size)) {
             return db_error_channel_need_more;
         }
         mc->command_line[size] = 0;

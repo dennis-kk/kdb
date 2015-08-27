@@ -102,5 +102,8 @@ int kdb_worker_wait_for_stop(kdb_worker_t* worker) {
 int kdb_worker_push(kdb_worker_t* worker, void* ptr) {
     assert(worker);
     assert(ptr);
-    return kdb_queue_push(worker->queue, ptr);
+    if (kdb_queue_push(worker->queue, ptr)) {
+        return db_error_queue_full;
+    }
+    return db_error_ok;
 }

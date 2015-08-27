@@ -25,7 +25,7 @@
 #ifndef DB_QUEUE_H
 #define DB_QUEUE_H
 
-#include "db_internal.h"
+typedef struct _queue_t kdb_queue_t;
 
 /**
  * 建立队列
@@ -44,7 +44,7 @@ void kdb_queue_destroy(kdb_queue_t* kq);
  * 将指针放入队列尾
  * @param kq kdb_queue_t实例
  * @param ptr 指针
- * @retval db_error_ok 成功
+ * @retval 0 成功
  * @retval 其他 失败
  */
 int kdb_queue_push(kdb_queue_t* kq, void* ptr);

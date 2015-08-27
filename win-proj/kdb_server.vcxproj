@@ -13,9 +13,10 @@
   <ItemGroup>
     <ClInclude Include="..\interface\db_server_api.h" />
     <ClInclude Include="..\interface\db_server_config.h" />
+    <ClInclude Include="..\internal\common\db_common.h" />
+    <ClInclude Include="..\internal\common\db_queue.h" />
     <ClInclude Include="..\internal\protocol\memcache_analyzer.h" />
     <ClInclude Include="..\internal\server\db_internal.h" />
-    <ClInclude Include="..\internal\server\db_queue.h" />
     <ClInclude Include="..\internal\server\db_server.h" />
     <ClInclude Include="..\internal\server\db_space.h" />
     <ClInclude Include="..\internal\server\db_task.h" />
@@ -24,8 +25,8 @@
     <ClInclude Include="..\internal\server\db_worker.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\internal\common\db_queue.c" />
     <ClCompile Include="..\internal\protocol\memcache_analyzer.c" />
-    <ClCompile Include="..\internal\server\db_queue.c" />
     <ClCompile Include="..\internal\server\db_server.c" />
     <ClCompile Include="..\internal\server\db_space.c" />
     <ClCompile Include="..\internal\server\db_task.c" />
@@ -76,7 +77,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\internal\server\;$(KNET_INCLUDE)\;..\internal\protocol\;..\interface\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\internal\server\;$(KNET_INCLUDE)\;..\internal\protocol\;..\interface\;..\internal\common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996;4201;4127</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>

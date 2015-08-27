@@ -161,7 +161,7 @@ void kdb_task_return_success(kdb_task_t* task, kdb_space_value_t* sv, kdb_space_
                 v = kdb_space_value_get_value(sv);
                 knet_stream_push_varg(stream, VALUE_FORMAT, task->keys[0], kdb_value_get_cas_id(v), kdb_value_get_size(v));
                 knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-                knet_stream_push_varg(stream, MEMCACHED_CRLF);
+                knet_stream_push_varg(stream, CRLF);
             }
             knet_stream_push_varg(stream, END);
             break;
@@ -171,7 +171,7 @@ void kdb_task_return_success(kdb_task_t* task, kdb_space_value_t* sv, kdb_space_
                     v = kdb_space_value_get_value(svs[i]);
                     knet_stream_push_varg(stream, VALUE_FORMAT, task->keys[i], kdb_value_get_cas_id(v), kdb_value_get_size(v));
                     knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-                    knet_stream_push_varg(stream, MEMCACHED_CRLF);
+                    knet_stream_push_varg(stream, CRLF);
                 }
             }
             knet_stream_push_varg(stream, END);
@@ -180,7 +180,7 @@ void kdb_task_return_success(kdb_task_t* task, kdb_space_value_t* sv, kdb_space_
         case command_type_decr:
             v = kdb_space_value_get_value(sv);
             knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
-            knet_stream_push_varg(stream, MEMCACHED_CRLF);
+            knet_stream_push_varg(stream, CRLF);
             break;
         case command_type_delete:
         case command_type_deletespace:

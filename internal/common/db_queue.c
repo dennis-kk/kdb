@@ -22,6 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "knet.h"
 #include "db_queue.h"
 
 /**
@@ -72,11 +73,11 @@ int kdb_queue_push(kdb_queue_t* kq, void* ptr) {
     lock_lock(kq->lock);
     if (sizeof(kdb_queue_item_t) != ringbuffer_write(kq->rb, (char*)&item, sizeof(kdb_queue_item_t))) {
         lock_unlock(kq->lock);
-        return db_error_queue_full;
+        return 1;
     }
     lock_unlock(kq->lock);
     atomic_counter_inc(&kq->count);
-    return db_error_ok;
+    return 0;
 }
 
 void* kdb_queue_pop(kdb_queue_t* kq) {

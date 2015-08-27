@@ -8,6 +8,7 @@ INCLUDE_DIRECTORIES(
   ${PROJECT_SOURCE_DIR}/interface
   ${PROJECT_SOURCE_DIR}/internal/server
   ${PROJECT_SOURCE_DIR}/internal/protocol
+  ${PROJECT_SOURCE_DIR}/internal/common
 )
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
@@ -19,7 +20,7 @@ add_executable(kdb
 	internal/server/db_server.c
 	internal/server/db_space.c
 	internal/server/db_util.c
-	internal/server/db_queue.c
+	internal/common/db_queue.c
 	internal/server/db_task.c
 	internal/server/db_worker.c
 	internal/server/test.c
