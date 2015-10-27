@@ -144,16 +144,6 @@ int memcache_analyzer_do_analyze_addspace(memcache_analyzer_t* mc, const char* b
 int memcache_analyzer_analyze_command_line(memcache_analyzer_t* mc, const char* buffer);
 
 /**
- * 解析命令行 - 获取单词
- * @param mc memcache_analyzer_t实例
- * @param command 命令行
- * @param size command长度
- * @retval db_error_ok 成功
- * @retval 其他 失败
- */
-int memcache_analyzer_command_line_get(const char* s, char* command, int size);
-
-/**
  * 执行命令
  * @param mc memcache_analyzer_t实例
  * @param channel kchannel_ref_t实例

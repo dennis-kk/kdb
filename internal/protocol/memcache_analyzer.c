@@ -79,30 +79,6 @@ int memcache_analyzer_drain(memcache_analyzer_t* mc, kchannel_ref_t* channel) {
     return error;
 }
 
-int memcache_analyzer_command_line_get(const char* s, char* command, int size) {
-    int pos = 0;
-    int i   = 0;
-    for (; *s; s++, pos++) {
-        if (i && (*s == CR)) { /* 遇到一个数据分割 */
-            break;
-        }
-        if (*s == WHITE_SPACE) { /* 遇到命令分割 */
-            if (i) {
-                break;
-            } else {
-                continue; /* trim左边的空格 */
-            }
-        }        
-        command[i++] = *s;
-        if (i >= size) { /* 溢出 */
-            return 0;
-        }
-    }
-    /* 保护 */
-    command[i] = 0;
-    return pos;
-}
-
 /*
  * incr <key> <value> [noreply]\r\n
  * decr <key> <value> [noreply]\r\n

@@ -167,10 +167,13 @@ void kdb_task_return_success(kdb_task_t* task, kdb_space_value_t* sv, kdb_space_
             break;
         case command_type_gets:
             for (i = 0; i < task->key_count; i++) {
-                if (svs[i]) {
+                if (svs[i]) { // key´æÔÚ
                     v = kdb_space_value_get_value(svs[i]);
                     knet_stream_push_varg(stream, VALUE_FORMAT, task->keys[i], kdb_value_get_cas_id(v), kdb_value_get_size(v));
                     knet_stream_push(stream, kdb_value_get_value(v), kdb_value_get_size(v));
+                    knet_stream_push_varg(stream, CRLF);
+                } else { // key²»´æÔÚ
+                    knet_stream_push_varg(stream, VALUE_FORMAT, task->keys[i], 0, 0);
                     knet_stream_push_varg(stream, CRLF);
                 }
             }

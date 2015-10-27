@@ -22,62 +22,19 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DB_UTIL_H
-#define DB_UTIL_H
+#ifndef DB_SERVER_NODE_H
+#define DB_SERVER_NODE_H
 
-#include "db_internal.h"
+#include "db_client_config.h"
 
-/**
- * 检查内存块是否为字符串描述的数字
- * @param s 内存块指针
- * @param size 内存块长度
- * @retval 0 不是
- * @retval 1 是
- */
-int isnumber(void* s, int size);
+kdb_server_node_t* kdb_server_node_create(const char* ip, int port);
+void kdb_server_node_destroy(kdb_server_node_t* srv_node);
+void kdb_server_node_set_channel(kdb_server_node_t* srv_node, kchannel_ref_t* channel);
+int kdb_server_node_exec(kdb_server_node_t* srv_node, kdb_client_task_t* task);
+kdb_server_node_mgr_t* kdb_server_node_mgr_create();
+void kdb_server_node_mgr_destroy(kdb_server_node_mgr_t* mgr);
+int kdb_server_node_mgr_add(kdb_server_node_mgr_t* mgr, kdb_server_node_t* snode);
+int kdb_server_node_mgr_del(kdb_server_node_mgr_t* mgr, kdb_server_node_t* snode);
+kdb_server_node_t* kdb_server_node_mgr_balance(kdb_server_node_mgr_t* mgr, const char* key);
 
-/**
- * long long转换为字符串
- * @param ll long long
- * @param buffer 转换后存放的缓冲区
- * @param size 缓冲区长度
- * @return 转换后的字符串指针
- */
-char* kdb_lltoa(long long ll, char* buffer, int* size);
-
-/**
- * 字符串转long long
- * @param s 字符串
- * @param size 长度
- * @return long long
- */
-long long atoll_s(void* s, int size);
-
-/**
- * 获取可执行文件目录
- * @return 可执行文件目录
- */
-const char* get_exe_path();
-
-/**
- * 调用malloc或用户自定义malloc
- * @param size 需要分配的大小
- * @return 内存地址
- */
-void* kdb_malloc(int size);
-
-/**
- * 调用realloc或用户自定义realloc
- * @param p 原有的内存地址
- * @param size 需要分配的大小
- * @return 内存地址
- */
-void* kdb_realloc(void* p, int size);
-
-/**
- * 调用free或用户自定义free
- * @param p 内存地址
- */
-void kdb_free(void* p);
-
-#endif /* DB_UTIL_H */
+#endif /* DB_SERVER_NODE_H */

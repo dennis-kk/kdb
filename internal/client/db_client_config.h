@@ -22,62 +22,28 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DB_UTIL_H
-#define DB_UTIL_H
+#ifndef DB_CLIENT_CONFIG_H
+#define DB_CLIENT_CONFIG_H
 
-#include "db_internal.h"
+#include "knet.h"
+#include "db_common.h"
 
-/**
- * 检查内存块是否为字符串描述的数字
- * @param s 内存块指针
- * @param size 内存块长度
- * @retval 0 不是
- * @retval 1 是
- */
-int isnumber(void* s, int size);
+typedef struct _client_t kdb_client_t;
+typedef struct _client_task_t kdb_client_task_t;
+typedef struct _server_node_t kdb_server_node_t;
+typedef struct _server_node_mgr_t kdb_server_node_mgr_t;
+typedef struct _memcache_client_analyzer_t memcache_client_analyzer_t;
 
-/**
- * long long转换为字符串
- * @param ll long long
- * @param buffer 转换后存放的缓冲区
- * @param size 缓冲区长度
- * @return 转换后的字符串指针
- */
-char* kdb_lltoa(long long ll, char* buffer, int* size);
+typedef enum _client_error_e {
+    db_client_ok = 0,
+    db_client_task_timeout,
+    db_client_need_more,
+    db_client_invalid_format,
+    db_client_unknown_command,
+    db_client_command_error,
+} kdb_client_error_e;
 
-/**
- * 字符串转long long
- * @param s 字符串
- * @param size 长度
- * @return long long
- */
-long long atoll_s(void* s, int size);
+/*! 任务回调函数 */
+typedef void (*kdb_task_cb_t)(kdb_client_task_t*);
 
-/**
- * 获取可执行文件目录
- * @return 可执行文件目录
- */
-const char* get_exe_path();
-
-/**
- * 调用malloc或用户自定义malloc
- * @param size 需要分配的大小
- * @return 内存地址
- */
-void* kdb_malloc(int size);
-
-/**
- * 调用realloc或用户自定义realloc
- * @param p 原有的内存地址
- * @param size 需要分配的大小
- * @return 内存地址
- */
-void* kdb_realloc(void* p, int size);
-
-/**
- * 调用free或用户自定义free
- * @param p 内存地址
- */
-void kdb_free(void* p);
-
-#endif /* DB_UTIL_H */
+#endif /* DB_CLIENT_CONFIG_H */

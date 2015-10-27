@@ -186,7 +186,7 @@ extern int kdb_space_value_check_type(kdb_space_value_t* v, kdb_space_value_type
 extern void kdb_space_value_set_ptr(kdb_space_value_t* v, void* ptr);
 
 /**
- * 设置空间路径
+ * 取得空间路径
  * @param v kdb_space_value_t实例
  * @param 空间路径
  */

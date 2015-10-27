@@ -49,7 +49,9 @@ typedef enum _command_type_e {
     command_type_quit,        /* 退出 */
 } command_type_e;
 
+#define MAX_NAME_SIZE              32                 /* 子路径的最大名字长度 */
 #define MAX_PATH_SIZE              MAX_NAME_SIZE * 4  /* 最大路径长度 */
+#define ACTION_BUFFER_LENGTH       1024 * 1024        /* 客户端一次发送的命令(包含值)的最大长度 */
 #define COMMAND_LINE_LENGTH        1024               /* 单个命令行的最大长度(不包含值) */
 #define COMMAND_LENGTH             32                 /* 命令最大长度 */
 #define FLAGS_LENGTH               32                 /* memcached flags字段最大长度 */
@@ -84,7 +86,75 @@ typedef enum _command_type_e {
 
 /*! 未使用*/
 #define UNUSED(v) (void)(v)
+
+/*! 字符串相等测试  */
+#define EQUAL(a, b) \
+    !strcmp(a, b)
+
 /*! 字符串遍历宏 */
 #define for_each_char(c, s) for (c = *s++; (c); c = *s++)
+
+/**
+ * 解析命令行 - 获取单词
+ * @param mc memcache_analyzer_t实例
+ * @param command 命令行
+ * @param size command长度
+ * @retval db_error_ok 成功
+ * @retval 其他 失败
+ */
+int memcache_analyzer_command_line_get(const char* s, char* command, int size) {
+    int pos = 0;
+    int i   = 0;
+    for (; *s; s++, pos++) {
+        if (i && (*s == CR)) { /* 遇到一个数据分割 */
+            break;
+        }
+        if (*s == WHITE_SPACE) { /* 遇到命令分割 */
+            if (i) {
+                break;
+            } else {
+                continue; /* trim左边的空格 */
+            }
+        }        
+        command[i++] = *s;
+        if (i >= size) { /* 溢出 */
+            return 0;
+        }
+    }
+    /* 保护 */
+    command[i] = 0;
+    return pos;
+}
+
+#define EQUAL_RETURN(a, b, error) \
+    do { \
+        if (EQUAL(a, b)) { \
+            return error; \
+        } \
+    } while(0);
+
+#define NOT_EQUAL_RETURN(a, b, error) \
+    do { \
+        if (!EQUAL(a, b)) { \
+            return error; \
+        } \
+    } while(0);
+
+#define GET_FORWARD(buffer, key, size, pos, bytes, error) \
+    do { \
+        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
+        if (!bytes) { \
+            return error; \
+        } \
+        pos += bytes; \
+    } while(0);
+
+#define GET_HOLD(buffer, key, size, pos, bytes, error) \
+    do { \
+        bytes = memcache_analyzer_command_line_get(buffer + pos, key, size); \
+        if (!bytes) { \
+            return error; \
+        } \
+    } while(0);
 
 #endif /* DB_COMMON_H */
