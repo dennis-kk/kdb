@@ -1,6 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "kdb_server", "kdb_server.vcxproj", "{07D0A1E5-175E-458F-B3A1-74437189CC5E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "kdb_client", "kdb_client.vcxproj", "{C3DCABFB-CBFE-4C6E-A3E5-563AB714CB9D}"
