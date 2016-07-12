@@ -23,7 +23,7 @@ add_executable(kdb
 	internal/common/db_queue.c
 	internal/server/db_task.c
 	internal/server/db_worker.c
-	internal/server/test.c
+	internal/server/main.c
 	internal/protocol/memcache_analyzer.c
 )
 
