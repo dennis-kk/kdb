@@ -32,7 +32,7 @@
     <ClCompile Include="..\internal\server\db_task.c" />
     <ClCompile Include="..\internal\server\db_util.c" />
     <ClCompile Include="..\internal\server\db_worker.c" />
-    <ClCompile Include="..\internal\server\test.c" />
+    <ClCompile Include="..\internal\server\main.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{07D0A1E5-175E-458F-B3A1-74437189CC5E}</ProjectGuid>
